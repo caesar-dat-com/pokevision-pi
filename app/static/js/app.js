@@ -45,6 +45,34 @@ $('#calm').addEventListener('click', () => {
   toast(on ? 'Movimiento reducido' : 'Animaciones activas');
 });
 
+/* ------------------------------------------------- polish: luz y fisica
+   Spotlight: cada tarjeta enciende su borde donde pasa el puntero.
+   Ripple: los botones sueltan una gota de tinta al pulsarse.
+   Ambos son baratos: solo escriben CSS custom props. */
+document.addEventListener('pointermove', (e) => {
+  const card = e.target.closest?.('.card');
+  if (!card) return;
+  const r = card.getBoundingClientRect();
+  card.style.setProperty('--mx', (e.clientX - r.left) + 'px');
+  card.style.setProperty('--my', (e.clientY - r.top) + 'px');
+}, { passive: true });
+
+document.addEventListener('pointerdown', (e) => {
+  const b = e.target.closest?.('.btn');
+  if (!b) return;
+  const r = b.getBoundingClientRect();
+  const ink = document.createElement('span');
+  ink.className = 'ink';
+  const s = Math.max(r.width, r.height) * 1.3;
+  ink.style.cssText = `width:${s}px;height:${s}px;left:${e.clientX - r.left - s/2}px;top:${e.clientY - r.top - s/2}px`;
+  b.appendChild(ink);
+  setTimeout(() => ink.remove(), 650);
+}, { passive: true });
+
+addEventListener('scroll', () => {
+  document.body.classList.toggle('scrolled', scrollY > 24);
+}, { passive: true });
+
 /* -------------------------------------------------------------------- tema */
 const themeIcon = () => document.documentElement.dataset.theme === 'dark' ? '☾' : '☀︎';
 $('#theme').textContent = themeIcon();
@@ -140,6 +168,9 @@ const skeleton = () => `
 
 /* ------------------------------------------------------------------ render */
 function tween(el, to, prefix, dec) {
+  el.classList?.remove('flash');
+  void el.offsetWidth;                    // reinicia la animación CSS
+  el.classList?.add('flash');
   const dur = 900, t0 = performance.now(), from = 0;
   if (document.body.classList.contains('calm')) {
     el.textContent = (prefix || '') + to.toFixed(dec); return;

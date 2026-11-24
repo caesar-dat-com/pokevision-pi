@@ -29,6 +29,7 @@ h1,h2,h3{font-family:var(--display);font-weight:900;letter-spacing:-.01em;margin
 h1{font-size:clamp(2.4rem,6vw,4.2rem)}
 h2{font-size:clamp(1.5rem,3vw,2.1rem)}
 h3{font-size:1.15rem}
+[data-theme=light] .label{color:rgba(13,19,48,.78)}
 .label{font-size:.68rem;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);font-weight:700}
 .dim{color:var(--ink-dim)}
 .mono{font-family:var(--cond);font-weight:700}
@@ -67,6 +68,7 @@ h3{font-size:1.15rem}
 .card h3{margin-bottom:12px}
 
 /* ---------------------------------------------------------------- visor */
+/* el visor recibe un velado superior e inferior: deja de ser un hueco negro */
 .viewer{position:relative;border-radius:var(--r-card);overflow:hidden;background:#00021f;aspect-ratio:4/3;border:1px solid var(--line)}
 .viewer video,.viewer canvas.live{width:100%;height:100%;object-fit:cover;display:block}
 /* el visor es siempre oscuro (es una camara, no un panel): su contenido lleva
@@ -99,6 +101,7 @@ h3{font-size:1.15rem}
 }
 .btn:hover{transform:translateY(-2px);background:rgba(var(--fg-rgb),.13)}
 .btn:active{transform:translateY(0) scale(.98)}
+[data-theme=light] .btn.primary{background:var(--blue-deep)}
 .btn.primary{background:var(--lime);color:#001a1f;border-color:transparent;box-shadow:0 0 34px rgba(191,233,0,.34)}
 .btn.primary:hover{box-shadow:0 0 46px rgba(191,233,0,.5)}
 .btn.ghost{background:transparent}
@@ -198,12 +201,13 @@ input[type=search],input[type=text]{
 input[type=search]:focus{border-color:var(--blue-glow);box-shadow:0 0 0 4px rgba(10,149,246,.16);outline:0}
 
 /* ---------------------------------------------------------------- tabs */
-.tabs{
+.tabs{--_pad:6px;
   position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:40;
   display:flex;gap:4px;padding:6px;border-radius:var(--r-pill);
   background:rgba(1,6,54,.72);border:1px solid var(--line-2);
   backdrop-filter:blur(26px) saturate(1.4);box-shadow:var(--shadow);
 }
+[data-theme=light] .tabs{background:rgba(13,19,48,.88);border:1px solid rgba(255,255,255,.18)}
 .tabs button{padding:11px 20px;border-radius:var(--r-pill);font-size:.8rem;font-weight:800;
   letter-spacing:.05em;color:rgba(249,255,250,.78);min-height:44px;position:relative;
   transition:color var(--t-micro)}
@@ -315,7 +319,85 @@ section.view.on{display:block}
 
 .theme-btn{font-size:1rem;line-height:1}
 
+/* ===================================================================== */
+/* POLISH E21: atmosfera, luz y fisica                                    */
+/* Todo transform/opacity (compositor), nada de repaint por frame.        */
+/* ===================================================================== */
+
+/* --- fondo aurora: 3 blobs de luz que derivan lentamente --- */
+.aurora{position:fixed;inset:-20%;z-index:-3;pointer-events:none;overflow:hidden}
+.aurora::before,.aurora::after{content:'';position:absolute;width:60vmax;height:60vmax;
+  border-radius:50%;filter:blur(90px);opacity:.32;mix-blend-mode:multiply;
+  will-change:transform}
+.aurora::before{background:radial-gradient(circle at 30% 30%,var(--blue-glow),transparent 65%);
+  top:-15%;left:-10%;animation:drift1 26s ease-in-out infinite alternate}
+.aurora::after{background:radial-gradient(circle at 70% 70%,var(--violet-a),transparent 65%);
+  bottom:-18%;right:-12%;animation:drift2 34s ease-in-out infinite alternate}
+.aurora .b3{position:absolute;width:48vmax;height:48vmax;border-radius:50%;filter:blur(100px);
+  opacity:.20;mix-blend-mode:multiply;will-change:transform;
+  background:radial-gradient(circle,var(--lime),transparent 65%);
+  top:32%;left:38%;animation:drift3 42s ease-in-out infinite alternate}
+@keyframes drift1{to{transform:translate(9vw,6vh) scale(1.12)}}
+@keyframes drift2{to{transform:translate(-11vw,-7vh) scale(1.18)}}
+@keyframes drift3{to{transform:translate(-6vw,9vh) scale(.88)}}
+[data-theme=dark] .aurora::before,[data-theme=dark] .aurora::after,[data-theme=dark] .aurora .b3{
+  mix-blend-mode:screen;opacity:.26}
+
+/* --- tarjetas: el borde se enciende donde pasa el dedo (spotlight) --- */
+.card{--mx:-500px;--my:-500px;position:relative}
+.card::after{content:'';position:absolute;inset:-1px;border-radius:inherit;pointer-events:none;
+  opacity:0;transition:opacity .45s var(--ease);
+  background:radial-gradient(340px circle at var(--mx) var(--my),
+    rgba(var(--fg-rgb),.06),transparent 62%);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;mask-composite:exclude;padding:1px}
+.card:hover::after{opacity:1}
+
+/* --- botones magneticos con ripple --- */
+.btn,.pill{position:relative;overflow:hidden}
+.btn{transition:transform .18s var(--ease),box-shadow .25s var(--ease)}
+.btn:not(:disabled):hover{transform:translateY(-1px)}
+.btn:not(:disabled):active{transform:translateY(0) scale(.97)}
+.btn .ink{position:absolute;border-radius:50%;transform:scale(0);opacity:.35;pointer-events:none;
+  background:radial-gradient(circle,rgba(var(--fg-rgb),.9),transparent 70%);animation:ink .6s ease-out forwards}
+@keyframes ink{to{transform:scale(2.6);opacity:0}}
+
+/* --- entrada de vistas: las tarjetas entran escalonadas --- */
+.view{--n:0}
+.view.on .card{animation:card-in .7s var(--ease) both}
+.view.on .card:nth-child(2){animation-delay:.06s}
+.view.on .card:nth-child(3){animation-delay:.12s}
+@keyframes card-in{from{opacity:0;transform:translateY(14px) scale(.985)}to{opacity:1;transform:none}}
+
+/* --- topbar pegajoso con material al hacer scroll --- */
+.topbar{position:sticky;top:0;z-index:40;backdrop-filter:blur(14px) saturate(1.3);
+  -webkit-backdrop-filter:blur(14px) saturate(1.3)}
+body.scrolled .topbar{background:rgba(var(--shade-rgb),.45);border-bottom:1px solid var(--line)}
+[data-theme=dark] body.scrolled .topbar{background:rgba(var(--fg-rgb),.05)}
+
+/* --- foco de escritura en dialogo: la caja respira mientras habla --- */
+.dialog:not(.done)::before{content:'';position:absolute;inset:0;pointer-events:none;
+  border-radius:inherit;background:linear-gradient(110deg,transparent 30%,rgba(var(--fg-rgb),.05) 50%,transparent 70%);
+  background-size:250% 100%;animation:shimmer 2.2s linear infinite}
+@keyframes shimmer{from{background-position:120% 0}to{background-position:-120% 0}}
+
+/* --- contadores: tinta tabular + flash al cambiar --- */
+.price-main{transition:color .3s}
+.price-sub{font-size:.95rem;margin-left:.35em;opacity:.85}
+.price-main.flash{animation:flash .8s var(--ease)}
+@keyframes flash{30%{transform:scale(1.04);color:var(--blue-glow)}}
+
+/* --- esqueleto con brillo al cargar metricas --- */
+.skel{position:relative;overflow:hidden;background:rgba(var(--fg-rgb),.07)}
+.skel::after{content:'';position:absolute;inset:0;
+  background:linear-gradient(100deg,transparent 30%,rgba(var(--fg-rgb),.10) 50%,transparent 70%);
+  background-size:220% 100%;animation:shimmer 1.6s linear infinite}
+
 @media (prefers-reduced-motion: reduce){
+.aurora{display:none}
+.view.on .card,.dialog .who img{animation:none}
+.card::after,.btn .ink{display:none}
+
   *,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
 }
 body.calm *,body.calm *::before,body.calm *::after{animation:none !important;transition-duration:.08s !important}

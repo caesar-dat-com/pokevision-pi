@@ -119,14 +119,46 @@ h3{font-size:1.15rem}
   transform-style:preserve-3d;box-shadow:0 30px 70px rgba(0,2,68,.75),0 0 0 1px rgba(var(--fg-rgb),.12);
   transition:transform var(--t-move) var(--ease);background:#070a2a;
 }
-.holo img{width:100%;height:100%;object-fit:cover}
+.holo img{width:100%;height:100%;object-fit:cover;backface-visibility:hidden}
+.holo.flipped{transform:rotateY(180deg)!important;transition:transform .9s var(--ease)}
+/* reverso: el dorso clasico azul de Pokemon, dibujado en CSS puro */
+.holo .back{position:absolute;inset:0;border-radius:inherit;transform:rotateY(180deg);
+  backface-visibility:hidden;overflow:hidden;
+  background:
+    radial-gradient(circle at 50% 34%,rgba(191,233,0,.28) 0 6%,transparent 34%),
+    repeating-linear-gradient(48deg,#0d1d6e 0 14px,#0a1454 14px 28px),
+    #0a1454;
+  box-shadow:inset 0 0 0 7px #fc3, inset 0 0 0 9px #0a1454;
+  display:grid;place-items:center}
+.holo .back::after{content:'⬢';font-size:64px;color:rgba(252,204,0,.9);
+  filter:drop-shadow(0 2px 6px rgba(0,0,0,.5))}
+/* foil arcoiris conico: el patron de las rarezas holograficas reales.
+   --hx/--hy los escribe el JS con el puntero (grados, no repintado). */
+.holo::before{content:'';position:absolute;inset:0;pointer-events:none;border-radius:inherit;
+  background:conic-gradient(from var(--ha,215deg) at 50% 50%,
+    transparent 0turn,rgba(255,0,200,.16) .08turn,transparent .16turn,
+    rgba(0,149,246,.18) .24turn,transparent .32turn,
+    rgba(191,233,0,.15) .42turn,transparent .5turn,
+    rgba(255,204,0,.16) .58turn,transparent .66turn,
+    rgba(132,119,251,.18) .74turn,transparent .82turn,
+    rgba(255,0,200,.14) .92turn,transparent 1turn);
+  mix-blend-mode:color-dodge;opacity:0;transition:opacity .35s}
+.holo:hover::before{opacity:1}
 .holo::after{ /* brillo holografico que sigue al puntero */
   content:'';position:absolute;inset:0;pointer-events:none;mix-blend-mode:color-dodge;opacity:.55;
   background:conic-gradient(from var(--ang,0deg) at var(--mx,50%) var(--my,50%),
     rgba(255,0,200,.35),rgba(10,149,246,.3),rgba(191,233,0,.3),rgba(132,119,251,.35),rgba(255,0,200,.35));
   transition:opacity var(--t-micro);
 }
-.holo.enter{animation:flipin var(--t-enter) var(--ease) both}
+.holo.enter{animation:packflip 1.35s var(--ease) both}
+@keyframes packflip{
+  0%{transform:perspective(1100px) rotateY(180deg) rotateZ(-7deg) translateY(-26px) scale(.78);opacity:0;
+     box-shadow:0 0 90px rgba(191,233,0,.5)}
+  55%{transform:perspective(1100px) rotateY(12deg) rotateZ(2deg) translateY(4px) scale(1.03);opacity:1}
+  100%{transform:perspective(1100px) rotateY(0) rotateZ(0) translateY(0) scale(1);opacity:1;
+     box-shadow:0 30px 70px rgba(0,2,68,.75)}
+}
+.holo.enter .sheen{animation:sheen 1.5s .5s var(--ease-out) both, sheen 2.6s 2.2s var(--ease-out) both}
 @keyframes flipin{
   0%{opacity:0;transform:rotateY(-62deg) translateZ(-120px) scale(.86)}
   60%{opacity:1}
@@ -394,7 +426,8 @@ body.scrolled .topbar{background:rgba(var(--shade-rgb),.45);border-bottom:1px so
   background-size:220% 100%;animation:shimmer 1.6s linear infinite}
 
 @media (prefers-reduced-motion: reduce){
-.aurora{display:none}
+.aurora,#sparkles{display:none}
+.holo::before{display:none}
 .view.on .card,.dialog .who img{animation:none}
 .card::after,.btn .ink{display:none}
 

@@ -261,6 +261,7 @@ function render(d) {
         <div class="holo enter" id="holo">
           <img src="${c.image || ''}" alt="${c.name || ''}" loading="lazy">
           <div class="sheen"></div>
+          <div class="back" aria-hidden="true"></div>
         </div>
       </div>
       <div class="identity">
@@ -325,6 +326,7 @@ function render(d) {
       </div>
     </div>`;
 
+  makeFlippable();
   speak(d);
   tween($('#pmain'), p.eur || 0, '€', 2);
   requestAnimationFrame(() => {
@@ -348,7 +350,30 @@ function render(d) {
     () => { show('v-market'); openCard(b.dataset.id); }));
 }
 
-/* ------------------------------------------------ mensaje del entrenador
+/* ----------------------------------------------- girar la carta (TCG Pocket)
+   Tap en la carta: gira 180° y muestra el reverso oficial; tap otra vez y
+   vuelve por donde vino. El giro mantiene el foil vivo en ambas caras. */
+function makeFlippable() {
+  const w = document.querySelector('.holo-wrap');
+  if (!w) return;
+  w.style.cursor = 'pointer';
+  let _down = null;
+  w.addEventListener('pointerdown', e => { _down = [e.clientX, e.clientY]; });
+  w.addEventListener('click', (e) => {
+    if (_down && (Math.abs(e.clientX - _down[0]) > 6 || Math.abs(e.clientY - _down[1]) > 6)) return;
+    const h = w.querySelector('.holo');
+    if (!h) return;
+    const flipped = h.classList.toggle('flipped');
+    h.style.transform = flipped
+      ? 'rotateY(180deg)'
+      : 'rotateY(0deg)';
+    h.style.transition = 'transform .9s var(--ease)';
+    toast(flipped ? 'Reverso' : 'Cara', 900);
+  });
+}
+const _mkFlip = makeFlippable;
+
+/* --------------------------------------------- mensaje del entrenador
    El resultado se "cuenta" primero, como en los juegos: un entrenador aparece y
    lo dice escribiendo. Cuando termina, el mensaje se queda fijo y debajo entra la
    ficha con todos los datos. */
@@ -504,6 +529,7 @@ function holoTilt(el) {
     const r = el.getBoundingClientRect();
     const px = (x - r.left) / r.width, py = (y - r.top) / r.height;
     el.style.transform = `rotateY(${(px - .5) * 18}deg) rotateX(${-(py - .5) * 18}deg) scale(1.02)`;
+    el.style.setProperty('--ha', (215 + (px - .5) * 160) + 'deg');   // foil arcoiris
     el.style.setProperty('--mx', (px * 100) + '%');
     el.style.setProperty('--my', (py * 100) + '%');
     el.style.setProperty('--ang', (px * 360) + 'deg');

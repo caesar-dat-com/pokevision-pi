@@ -1,0 +1,22 @@
+{
+ "test_mae_grades": 0.782,
+ "within_1_grade": 0.7524,
+ "mae_por_eje": {
+  "centrado": 0.334,
+  "esquinas": 0.578,
+  "bordes": 1.145,
+  "superficie": 1.07
+ },
+ "correlacion_por_eje": {
+  "centrado": 0.986,
+  "esquinas": 0.956,
+  "bordes": 0.802,
+  "superficie": 0.835
+ },
+ "baseline_predecir_media_mae": 2.326,
+ "gana_a_baseline": true,
+ "cartas_test": 630,
+ "muestras_test": 1260,
+ "epochs": 4,
+ "nota": "Desgaste sintetico de severidad conocida; etiqueta = 10 - 9*severidad."
+}

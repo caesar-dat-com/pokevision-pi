@@ -13,4 +13,4 @@ cp "$(ls data/images/*.webp | head -1)" /tmp/t.webp
 echo '=== scan'; curl -s -F file=@/tmp/test_card.jpg $B/api/scan | head -c 620; echo
 echo '=== search'; curl -s "$B/api/search?q=char" | head -c 240; echo
 echo '=== collection POST'; curl -s -X POST -H 'Content-Type: application/json' -d '{"card_id":"sv03-125","qty":1}' $B/api/collection | head -c 260; echo
-echo '=== log'; tail -4 /tmp/server.log
+echo '=== log'; tail -4 /tmp/uvicorn.log

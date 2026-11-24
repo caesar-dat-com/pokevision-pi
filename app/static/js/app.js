@@ -45,6 +45,18 @@ $('#calm').addEventListener('click', () => {
   toast(on ? 'Movimiento reducido' : 'Animaciones activas');
 });
 
+/* -------------------------------------------------------------------- tema */
+const themeIcon = () => document.documentElement.dataset.theme === 'dark' ? '☾' : '☀︎';
+$('#theme').textContent = themeIcon();
+$('#theme').addEventListener('click', () => {
+  const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = next;
+  localStorage.setItem('theme', next);
+  $('#theme').textContent = themeIcon();
+  document.querySelector('meta[name=theme-color]').content =
+    next === 'dark' ? '#000244' : '#eef1fa';
+});
+
 /* ------------------------------------------------------------------ cámara */
 async function startCam() {
   try {
@@ -149,7 +161,8 @@ function render(d) {
   const arrow = dirClass === 'up' ? '▲' : dirClass === 'down' ? '▼' : '●';
 
   $('#result').innerHTML = `
-    <div class="stagger">
+    ${dialogShell(d)}
+    <div class="stagger after-dialog">
       <div class="holo-wrap">
         <div class="holo enter" id="holo">
           <img src="${c.image || ''}" alt="${c.name || ''}" loading="lazy">
@@ -218,6 +231,7 @@ function render(d) {
       </div>
     </div>`;
 
+  speak(d);
   tween($('#pmain'), p.eur || 0, '€', 2);
   requestAnimationFrame(() => {
     $$('#result .fill').forEach(el => { el.style.transform = `scaleX(${el.dataset.v})`; });
@@ -238,6 +252,104 @@ function render(d) {
     </button>`).join('');
   $$('#alts .alt').forEach(b => b.addEventListener('click',
     () => { show('v-market'); openCard(b.dataset.id); }));
+}
+
+/* ------------------------------------------------ mensaje del entrenador
+   El resultado se "cuenta" primero, como en los juegos: un entrenador aparece y
+   lo dice escribiendo. Cuando termina, el mensaje se queda fijo y debajo entra la
+   ficha con todos los datos. */
+const TRAINERS = {
+  gem:    { img: 'cynthia',    name: 'Cynthia, Campeona' },
+  fake:   { img: 'policeman',  name: 'Agente Mirto' },
+  suspect:{ img: 'scientist',  name: 'Científico' },
+  damaged:{ img: 'nurse',      name: 'Enfermera Joy' },
+  rich:   { img: 'collector',  name: 'Coleccionista' },
+  normal: { img: 'oak',        name: 'Profesor Oak' },
+  none:   { img: 'psychic',    name: 'Vidente' },
+};
+
+function pickTrainer(d) {
+  const v = (d.condition || {}).verdict, g = (d.grade || {}).psa, eur = (d.price || {}).eur;
+  if (v === 'falsa') return TRAINERS.fake;
+  if (v === 'sospechosa') return TRAINERS.suspect;
+  if (v === 'danada' || v === 'dañada') return TRAINERS.damaged;
+  if (g >= 9.5) return TRAINERS.gem;
+  if (eur >= 40) return TRAINERS.rich;
+  return TRAINERS.normal;
+}
+
+function dialogShell(d) {
+  const t = pickTrainer(d);
+  return `
+    <div class="dialog" id="dialog">
+      <div class="who"><img src="/static/img/trainers/${t.img}.png" alt="${t.name}"></div>
+      <div class="bubble">
+        <span class="who-name">${t.name}</span>
+        <p class="say" id="say"></p>
+      </div>
+      <span class="next" id="dnext" hidden>▼</span>
+    </div>`;
+}
+
+function buildMessage(d) {
+  const c = d.card || {}, p = d.price || {}, f = d.forecast, g = d.grade || {},
+        cond = d.condition || {};
+  const parts = [];
+  parts.push(`¡Es <b>${c.name || 'una carta desconocida'}</b> de ${c.set_name || 'un set que no reconozco'}!`);
+  if (p.eur) {
+    parts.push(`Ahora mismo se paga a <span class="hl">€${p.eur.toFixed(2)}</span>` +
+      (p.cop ? ` (${p.cop.toLocaleString('es-CO')} COP)` : '') + '.');
+  }
+  if (cond.verdict === 'falsa') {
+    parts.push(`Cuidado: la veo <span class="bad">falsa</span> con un ${Math.round(cond.confidence * 100)}% de confianza.`);
+  } else if (cond.verdict === 'sospechosa') {
+    parts.push(`No me cuadra del todo: la marco como <span class="bad">sospechosa</span>, mírala con lupa.`);
+  } else if (cond.verdict === 'danada' || cond.verdict === 'dañada') {
+    parts.push(`Está <span class="bad">dañada</span>, se nota el desgaste.`);
+  } else if (cond.verdict) {
+    parts.push(`La veo <span class="good">auténtica</span> (${Math.round(cond.confidence * 100)}% de confianza).`);
+  }
+  if (g.psa != null) {
+    parts.push(`De calificación le pongo un <span class="hl">PSA ${Number.isInteger(g.psa) ? g.psa : g.psa.toFixed(1)}</span>` +
+      (g.limiting_factor ? `, la limitan ${g.limiting_factor === 'centrado' ? 'el centrado' : 'l' + (g.limiting_factor === 'superficie' ? 'a superficie' : 'os ' + g.limiting_factor)}` : '') + '.');
+    if (g.worth_grading === true) parts.push(`Graduarla <span class="good">compensa</span>: dejaría unos €${g.net_gain_eur} netos.`);
+    else if (g.worth_grading === false) parts.push(`Graduarla <span class="bad">no compensa</span> a este precio.`);
+  }
+  if (f) {
+    const pct = f.change_pct_180d;
+    parts.push(pct > 2 ? `Y va <span class="good">al alza</span>: +${pct}% a 180 días.`
+      : pct < -2 ? `Ojo, va <span class="bad">a la baja</span>: ${pct}% a 180 días.`
+      : `Su precio está <b>plano</b> de aquí a 180 días.`);
+  }
+  return parts.join(' ');
+}
+
+let SAY_TIMER = null;
+function speak(d) {
+  const el = $('#say'), dlg = $('#dialog'), data = $('#result .after-dialog');
+  if (!el) return;
+  const html = buildMessage(d);
+  const finish = () => {
+    clearInterval(SAY_TIMER);
+    el.innerHTML = html;
+    dlg.classList.add('done');
+    $('#dnext').hidden = false;
+    data.classList.add('in');          // la ficha entra y el mensaje queda fijo arriba
+  };
+  if (document.body.classList.contains('calm')) { finish(); return; }
+
+  // escribe el texto respetando las etiquetas HTML (no se parte un <span> por la mitad)
+  const tokens = html.match(/<[^>]+>|&[a-z]+;|[\s\S]/g) || [];
+  let i = 0, out = '';
+  clearInterval(SAY_TIMER);
+  el.innerHTML = '<span class="caret"></span>';
+  SAY_TIMER = setInterval(() => {
+    if (i >= tokens.length) return finish();
+    // en cada tic avanza 2 caracteres: legible pero sin hacerse eterno
+    for (let k = 0; k < 2 && i < tokens.length; k++) out += tokens[i++];
+    el.innerHTML = out + '<span class="caret"></span>';
+  }, 18);
+  dlg.onclick = finish;               // tocar la caja salta el texto, como en el juego
 }
 
 /* ------------------------------------------------- calificación tipo PSA */

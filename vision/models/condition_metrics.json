@@ -1,37 +1,37 @@
 {
-  "test_accuracy": 0.917989417989418,
+  "test_accuracy": 0.9216931216931217,
   "per_class": {
     "autentica": {
-      "precision": 0.8716,
-      "recall": 0.9048,
-      "f1": 0.8879
+      "precision": 0.8576,
+      "recall": 0.9365,
+      "f1": 0.8953
     },
     "falsa": {
-      "precision": 0.9525,
-      "recall": 0.9556,
-      "f1": 0.954
+      "precision": 0.9754,
+      "recall": 0.9444,
+      "f1": 0.9597
     },
     "danada": {
-      "precision": 0.9321,
-      "recall": 0.8937,
-      "f1": 0.9125
+      "precision": 0.9409,
+      "recall": 0.8841,
+      "f1": 0.9116
     }
   },
   "confusion_matrix": [
     [
-      570,
-      24,
-      36
+      590,
+      11,
+      29
     ],
     [
-      23,
-      602,
-      5
+      29,
+      595,
+      6
     ],
     [
-      61,
-      6,
-      563
+      69,
+      4,
+      557
     ]
   ],
   "classes": [
@@ -41,6 +41,6 @@
   ],
   "cards_train": 3568,
   "cards_test": 630,
-  "epochs": 4,
+  "epochs": 5,
   "nota": "clases falsa/danada sinteticas"
 }

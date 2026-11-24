@@ -1,0 +1,24 @@
+/* PokeVision Pi - tokens. Paleta tomada del sitio real de Pokemon Champions. */
+@font-face{font-family:'Sofia Sans Condensed';src:url('../fonts/sofia-sans-condensed-latin-900-normal.woff2') format('woff2');font-weight:900;font-display:swap}
+@font-face{font-family:'Sofia Sans Condensed';src:url('../fonts/sofia-sans-condensed-latin-700-normal.woff2') format('woff2');font-weight:700;font-display:swap}
+@font-face{font-family:'Saira';src:url('../fonts/saira-latin-400-normal.woff2') format('woff2');font-weight:400;font-display:swap}
+@font-face{font-family:'Saira';src:url('../fonts/saira-latin-700-normal.woff2') format('woff2');font-weight:700;font-display:swap}
+@font-face{font-family:'Saira';src:url('../fonts/saira-latin-800-normal.woff2') format('woff2');font-weight:800;font-display:swap}
+@font-face{font-family:'Saira Condensed';src:url('../fonts/saira-condensed-latin-700-normal.woff2') format('woff2');font-weight:700;font-display:swap}
+
+:root{
+  --bg-abyss:#000244; --bg-deep:#010636; --bg-royal:#1c208a;
+  --blue-glow:#0a95f6; --blue-deep:#1b6fef;
+  --lime:#bfe900; --gold:#fc0; --violet-a:#8477fb; --violet-b:#5230ec; --magenta:#ff00c8;
+  --ink:#f9fffa; --ink-dim:rgba(249,255,250,.62); --ink-faint:rgba(249,255,250,.38);
+  --danger:#ff4d5e; --warn:#ffa23a; --ok:#bfe900;
+  --glass:rgba(255,255,255,.055); --glass-2:rgba(255,255,255,.085);
+  --line:rgba(255,255,255,.1); --line-2:rgba(255,255,255,.18);
+  --r-pill:999px; --r-card:22px; --r-chip:10px;
+  --ease:cubic-bezier(.16,1,.3,1); --ease-out:cubic-bezier(.22,.61,.36,1);
+  --t-micro:180ms; --t-move:420ms; --t-enter:900ms;
+  --shadow:0 24px 60px rgba(0,2,68,.55); --shadow-sm:0 8px 24px rgba(0,2,68,.45);
+  --display:'Sofia Sans Condensed',"Saira Condensed",system-ui,sans-serif;
+  --ui:'Saira',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+  --cond:'Saira Condensed','Saira',system-ui,sans-serif;
+}

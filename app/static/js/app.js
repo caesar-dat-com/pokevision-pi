@@ -1,0 +1,383 @@
+/* PokéVision Pi — lógica de interfaz. Vanilla JS, sin dependencias. */
+'use strict';
+
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const fmt = (v, c) => v == null ? '—' : (c || '€') + Number(v).toFixed(Number(v) < 10 ? 2 : 2);
+let LAST = null, STREAM = null, BUSY = false, AUTO = null;
+
+/* ------------------------------------------------------------------ toast */
+let toastT;
+function toast(msg) {
+  const t = $('#toast');
+  t.textContent = msg; t.classList.add('on');
+  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 2600);
+}
+
+/* ------------------------------------------------------------------ tabs */
+function moveGlider() {
+  const on = $('#tabs button.on'), g = $('#tabs .glider');
+  g.style.width = on.offsetWidth + 'px';
+  g.style.transform = `translateX(${on.offsetLeft - 6}px)`;
+}
+function show(id) {
+  const go = () => {
+    $$('section.view').forEach(s => s.classList.toggle('on', s.id === id));
+    $$('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.v === id));
+    moveGlider();
+    if (id === 'v-col') loadCollection();
+    if (id === 'v-models') loadMetrics();
+  };
+  if (document.startViewTransition && !document.body.classList.contains('calm')) {
+    document.startViewTransition(go);
+  } else { go(); }
+}
+$('#tabs').addEventListener('click', e => {
+  const b = e.target.closest('button[data-v]'); if (b) show(b.dataset.v);
+});
+addEventListener('resize', moveGlider);
+
+/* ------------------------------------------------------- movimiento reducido */
+if (localStorage.getItem('calm') === '1') document.body.classList.add('calm');
+$('#calm').addEventListener('click', () => {
+  const on = document.body.classList.toggle('calm');
+  localStorage.setItem('calm', on ? '1' : '0');
+  toast(on ? 'Movimiento reducido' : 'Animaciones activas');
+});
+
+/* ------------------------------------------------------------------ cámara */
+async function startCam() {
+  try {
+    STREAM = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 960 } },
+      audio: false
+    });
+    const v = $('#video');
+    v.srcObject = STREAM; await v.play();
+    $('#vph').hidden = true;
+    $('#btn-cam').textContent = 'Apagar cámara';
+    toast('Cámara activa');
+  } catch (e) {
+    $('#vph').innerHTML = 'No se pudo abrir la cámara.<br><small>' + e.message +
+      '</small><br>Usa <b>Subir imagen</b>.';
+    toast('Sin acceso a la cámara');
+  }
+}
+function stopCam() {
+  if (STREAM) { STREAM.getTracks().forEach(t => t.stop()); STREAM = null; }
+  $('#vph').hidden = false;
+  $('#btn-cam').textContent = 'Activar cámara';
+}
+$('#btn-cam').addEventListener('click', () => STREAM ? stopCam() : startCam());
+$('#btn-file').addEventListener('click', () => $('#file').click());
+$('#file').addEventListener('change', e => {
+  const f = e.target.files[0]; if (f) sendBlob(f);
+});
+
+/* recorta el marco guía (proporción de carta) antes de enviar */
+function grabFrame() {
+  const v = $('#video');
+  if (!v.videoWidth) return null;
+  const vw = v.videoWidth, vh = v.videoHeight;
+  const boxH = vh * 0.82, boxW = boxH * 0.716;
+  const sx = (vw - boxW) / 2, sy = (vh - boxH) / 2;
+  const c = document.createElement('canvas');
+  c.width = 480; c.height = Math.round(480 / 0.716);
+  c.getContext('2d').drawImage(v, sx, sy, boxW, boxH, 0, 0, c.width, c.height);
+  return new Promise(r => c.toBlob(r, 'image/jpeg', 0.9));
+}
+
+/* ------------------------------------------------------------------ escaneo */
+async function scan() {
+  if (BUSY) return;
+  if (!STREAM) { toast('Activa la cámara o sube una imagen'); return; }
+  const blob = await grabFrame();
+  if (!blob) { toast('La cámara aún no da imagen'); return; }
+  sendBlob(blob);
+}
+async function sendBlob(blob) {
+  if (BUSY) return;
+  BUSY = true;
+  $('#viewer').classList.add('scanning');
+  $('#result').innerHTML = skeleton();
+  const fd = new FormData();
+  fd.append('file', blob, 'scan.jpg');
+  try {
+    const r = await fetch('/api/scan', { method: 'POST', body: fd });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+    LAST = data;
+    render(data);
+  } catch (e) {
+    $('#result').innerHTML = `<div class="empty">Error en el análisis.<br><small>${e.message}</small></div>`;
+  } finally {
+    BUSY = false;
+    $('#viewer').classList.remove('scanning');
+  }
+}
+$('#btn-scan').addEventListener('click', scan);
+$('#auto').addEventListener('change', e => {
+  clearInterval(AUTO);
+  if (e.target.checked) { AUTO = setInterval(scan, 2500); toast('Modo continuo activo'); }
+});
+
+const skeleton = () => `
+  <div class="holo-wrap"><div class="skel" style="width:min(252px,62vw);aspect-ratio:.716;border-radius:14px"></div></div>
+  <div class="skel" style="height:26px;margin:10px auto;width:62%"></div>
+  <div class="skel" style="height:62px;margin-top:16px"></div>`;
+
+/* ------------------------------------------------------------------ render */
+function tween(el, to, prefix, dec) {
+  const dur = 900, t0 = performance.now(), from = 0;
+  if (document.body.classList.contains('calm')) {
+    el.textContent = (prefix || '') + to.toFixed(dec); return;
+  }
+  (function step(now) {
+    const p = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - p, 3);
+    el.textContent = (prefix || '') + (from + (to - from) * e).toFixed(dec);
+    if (p < 1) requestAnimationFrame(step);
+  })(t0);
+}
+
+function render(d) {
+  if (!d.ok || !d.card) {
+    $('#result').innerHTML = '<div class="empty">No se reconoció ninguna carta. Mejora la luz y encuadra mejor.</div>';
+    return;
+  }
+  const c = d.card, p = d.price || {}, f = d.forecast, cond = d.condition || {};
+  const dirClass = !f ? 'flat' : (f.change_pct_180d > 2 ? 'up' : f.change_pct_180d < -2 ? 'down' : 'flat');
+  const arrow = dirClass === 'up' ? '▲' : dirClass === 'down' ? '▼' : '●';
+
+  $('#result').innerHTML = `
+    <div class="stagger">
+      <div class="holo-wrap">
+        <div class="holo enter" id="holo">
+          <img src="${c.image || ''}" alt="${c.name || ''}" loading="lazy">
+          <div class="sheen"></div>
+        </div>
+      </div>
+      <div class="identity">
+        <h2>${c.name || '—'}</h2>
+        <div class="chips">
+          <span class="chip">${c.set_name || '—'}</span>
+          <span class="chip">#${c.local_id || '?'}</span>
+          ${c.rarity && c.rarity !== 'None' ? `<span class="chip gold">${c.rarity}</span>` : ''}
+          <span class="chip lime">${Math.round((c.match_score || 0) * 100)}% coincidencia</span>
+          ${d.demo ? '<span class="chip">modo demo</span>' : ''}
+        </div>
+      </div>
+
+      <div style="margin-top:18px">
+        <span class="label">Valor actual</span>
+        <div class="price-hero">
+          <div class="price-main" id="pmain">€0.00</div>
+          <div class="price-alt">${p.usd ? '$' + p.usd + ' · ' : ''}${p.cop ? '$' + p.cop.toLocaleString('es-CO') + ' COP' : ''}</div>
+          <div class="spacer"></div>
+          ${f ? `<span class="delta ${dirClass}">${arrow} ${f.change_pct_180d > 0 ? '+' : ''}${f.change_pct_180d}% a 180 días</span>` : ''}
+        </div>
+        <div class="price-grid">
+          <div class="stat"><span class="label">Mínimo</span><b>${fmt(p.low)}</b></div>
+          <div class="stat"><span class="label">Tendencia</span><b>${fmt(p.trend)}</b></div>
+          <div class="stat"><span class="label">Media 7d</span><b>${fmt(p.avg7)}</b></div>
+          <div class="stat"><span class="label">Media 30d</span><b>${fmt(p.avg30)}</b></div>
+        </div>
+      </div>
+
+      <div style="margin-top:20px">
+        <span class="label">Autenticidad y estado</span>
+        <div class="verdict" style="margin-top:10px">
+          <div class="ring">
+            <svg width="76" height="76">
+              <circle cx="38" cy="38" r="32" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="7"/>
+              <circle id="ringc" cx="38" cy="38" r="32" fill="none" stroke="currentColor" stroke-width="7"
+                      stroke-linecap="round" stroke-dasharray="201" stroke-dashoffset="201"
+                      class="v-${cond.verdict}"/>
+            </svg>
+            <span>${Math.round((cond.confidence || 0) * 100)}%</span>
+          </div>
+          <div class="txt">
+            <h3 class="v-${cond.verdict}">${(cond.verdict || '—').toUpperCase()}</h3>
+            <small class="dim">${cond.modelo || ''}</small>
+          </div>
+        </div>
+        <div class="bars">
+          ${Object.entries(cond.signals || {}).map(([k, v]) => `
+            <div class="bar"><span class="dim">${k}</span>
+              <span class="track"><span class="fill" data-v="${v}"></span></span>
+              <b class="mono">${Math.round(v * 100)}</b></div>`).join('')}
+        </div>
+        <ul class="notes">${(cond.notes || []).map(n => `<li>${n}</li>`).join('')}</ul>
+      </div>
+
+      <div class="controls" style="margin-top:18px">
+        <button class="btn primary" id="btn-save">＋ Guardar en colección</button>
+        <button class="btn" id="btn-market">Ver mercado</button>
+        <span class="pill"><span class="dot"></span>${d.ms} ms</span>
+      </div>
+    </div>`;
+
+  tween($('#pmain'), p.eur || 0, '€', 2);
+  requestAnimationFrame(() => {
+    $$('#result .fill').forEach(el => { el.style.transform = `scaleX(${el.dataset.v})`; });
+    const ring = $('#ringc');
+    if (ring) ring.style.strokeDashoffset = 201 * (1 - (cond.confidence || 0));
+  });
+  holoTilt($('#holo'));
+
+  $('#btn-save').addEventListener('click', () => addToCollection(c.id, cond.verdict));
+  $('#btn-market').addEventListener('click', () => { show('v-market'); openCard(c.id); });
+
+  const alts = d.alternatives || [];
+  $('#alts-card').hidden = !alts.length;
+  $('#alts').innerHTML = alts.map(a => `
+    <button class="alt" data-id="${a.id}">
+      <img src="${a.image || ''}" alt="${a.name || ''}" loading="lazy">
+      <b>${a.name || '—'}</b><small>${Math.round((a.match_score || 0) * 100)}%</small>
+    </button>`).join('');
+  $$('#alts .alt').forEach(b => b.addEventListener('click',
+    () => { show('v-market'); openCard(b.dataset.id); }));
+}
+
+/* brillo holográfico que sigue al dedo/puntero */
+function holoTilt(el) {
+  if (!el || document.body.classList.contains('calm')) return;
+  const move = (x, y) => {
+    const r = el.getBoundingClientRect();
+    const px = (x - r.left) / r.width, py = (y - r.top) / r.height;
+    el.style.transform = `rotateY(${(px - .5) * 18}deg) rotateX(${-(py - .5) * 18}deg) scale(1.02)`;
+    el.style.setProperty('--mx', (px * 100) + '%');
+    el.style.setProperty('--my', (py * 100) + '%');
+    el.style.setProperty('--ang', (px * 360) + 'deg');
+  };
+  el.addEventListener('pointermove', e => move(e.clientX, e.clientY));
+  el.addEventListener('touchmove', e => {
+    const t = e.touches[0]; if (t) move(t.clientX, t.clientY);
+  }, { passive: true });
+  const reset = () => { el.style.transform = ''; };
+  el.addEventListener('pointerleave', reset);
+  el.addEventListener('touchend', reset);
+}
+
+/* ------------------------------------------------------------- colección */
+async function addToCollection(id, cond) {
+  const r = await fetch('/api/collection', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ card_id: id, qty: 1, condition: cond || 'autentica' })
+  });
+  const d = await r.json();
+  toast('Guardada · colección €' + d.total_eur);
+}
+async function loadCollection() {
+  const d = await (await fetch('/api/collection')).json();
+  tween($('#col-total'), d.total_eur || 0, '€', 2);
+  $('#col-cop').textContent = d.total_cop ? '$' + d.total_cop.toLocaleString('es-CO') + ' COP' : '—';
+  const n = (d.items || []).reduce((a, b) => a + (b.qty || 1), 0);
+  $('#col-count').textContent = n + (n === 1 ? ' carta' : ' cartas');
+  $('#col-list').innerHTML = (d.items || []).length ? d.items.map(i => `
+    <div class="row">
+      <img src="${i.image}" alt="" loading="lazy">
+      <div><b>${i.name}</b><small>${i.set_name || ''} · ${i.condition || ''} · x${i.qty}</small></div>
+      <div class="val">${fmt(i.eur)}</div>
+    </div>`).join('')
+    : '<div class="empty">Colección vacía. Escanea una carta y pulsa «Guardar».</div>';
+}
+
+/* ---------------------------------------------------------------- mercado */
+let searchT;
+$('#q').addEventListener('input', e => {
+  clearTimeout(searchT);
+  const q = e.target.value.trim();
+  if (q.length < 2) { $('#results').innerHTML = ''; return; }
+  searchT = setTimeout(async () => {
+    const d = await (await fetch('/api/search?q=' + encodeURIComponent(q))).json();
+    $('#results').innerHTML = (d.items || []).length ? d.items.map(i => `
+      <button class="row" data-id="${i.id}" style="text-align:left;width:100%">
+        <img src="${i.image}" alt="" loading="lazy">
+        <div><b>${i.name}</b><small>${i.set_name || ''} · ${i.rarity || ''}</small></div>
+        <div class="val">${fmt(i.eur)}</div>
+      </button>`).join('') : '<div class="empty">Sin resultados.</div>';
+    $$('#results .row').forEach(b => b.addEventListener('click', () => openCard(b.dataset.id)));
+  }, 260);
+});
+
+async function openCard(id) {
+  const d = await (await fetch('/api/card/' + encodeURIComponent(id))).json();
+  const p = d.price || {}, f = d.forecast;
+  $('#market-detail').hidden = false;
+  $('#md-name').textContent = d.card.name + ' · ' + (d.card.set_name || '');
+  tween($('#md-price'), p.eur || p.trend || 0, '€', 2);
+  $('#md-alt').textContent = (d.card.rarity && d.card.rarity !== 'None' ? d.card.rarity + ' · ' : '') + '#' + (d.card.local_id || '?');
+  const dl = $('#md-delta');
+  if (f) {
+    const up = f.change_pct_180d > 2, down = f.change_pct_180d < -2;
+    dl.className = 'delta ' + (up ? 'up' : down ? 'down' : 'flat');
+    dl.textContent = (up ? '▲ ' : down ? '▼ ' : '● ') +
+      (f.change_pct_180d > 0 ? '+' : '') + f.change_pct_180d + '% a 180 días · confianza ' +
+      Math.round(f.confidence * 100) + '%';
+  } else { dl.className = 'delta flat'; dl.textContent = 'sin predicción'; }
+
+  const hist = [];
+  if (p.avg30) hist.push({ x: -30, y: p.avg30 });
+  if (p.avg7) hist.push({ x: -7, y: p.avg7 });
+  hist.push({ x: 0, y: p.eur || p.trend || p.avg7 || 0 });
+  const fut = f ? f.horizon_days.map((h, i) => ({
+    x: h, y: f.eur[i], lo: f.low_band[i], hi: f.high_band[i]
+  })) : [];
+  PriceChart.draw($('#chart'), hist, fut, {});
+
+  $('#md-stats').innerHTML = `
+    <div class="stat"><span class="label">Mínimo</span><b>${fmt(p.low)}</b></div>
+    <div class="stat"><span class="label">Media 7d</span><b>${fmt(p.avg7)}</b></div>
+    <div class="stat"><span class="label">Media 30d</span><b>${fmt(p.avg30)}</b></div>
+    <div class="stat"><span class="label">${f ? 'A 180 días' : 'Tendencia'}</span><b>${f ? fmt(f.eur[2]) : fmt(p.trend)}</b></div>`;
+  $('#market-detail').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+/* ----------------------------------------------------------------- modelos */
+async function loadMetrics() {
+  const h = await (await fetch('/api/health')).json();
+  const m = h.metrics || {};
+  const box = v => `<div class="stat"><span class="label">${v[0]}</span><b>${v[1]}</b></div>`;
+  let html = '';
+  if (m.embedder) {
+    html += `<h3 style="margin-top:4px">Identificación de carta</h3>
+      <p class="dim" style="font-size:.82rem;margin:4px 0 10px">MobileNetV3-Small + aprendizaje contrastivo (NT-Xent) sobre fotos simuladas.</p>
+      <div class="price-grid">${[['recall@1', (m.embedder['recall@1'] || '—')],
+        ['recall@5', (m.embedder['recall@5'] || '—')],
+        ['imágenes', (m.embedder.images || '—')],
+        ['épocas', (m.embedder.epochs || '—')]].map(box).join('')}</div>`;
+  }
+  if (m.condition) {
+    const pc = m.condition.per_class || {};
+    html += `<h3 style="margin-top:18px">Autenticidad y estado</h3>
+      <p class="dim" style="font-size:.82rem;margin:4px 0 10px">MobileNetV3-Small, 3 clases. Split por carta: ninguna carta de test se vio en entrenamiento.</p>
+      <div class="price-grid">${[['exactitud', (m.condition.test_accuracy * 100).toFixed(1) + '%'],
+        ['F1 auténtica', (pc.autentica ? pc.autentica.f1 : '—')],
+        ['F1 falsa', (pc.falsa ? pc.falsa.f1 : '—')],
+        ['F1 dañada', (pc.danada ? pc.danada.f1 : '—')]].map(box).join('')}</div>`;
+  }
+  if (m.price) {
+    html += `<h3 style="margin-top:18px">Predicción de valor</h3>
+      <p class="dim" style="font-size:.82rem;margin:4px 0 10px">${m.price.objetivo || ''} · ${m.price.fuente || ''}</p>
+      <div class="price-grid">${[['acierto dirección', (m.price.acierto_direccion * 100).toFixed(1) + '%'],
+        ['MAE', m.price.mae], ['R²', m.price.r2],
+        ['baseline MAE', m.price.baseline_cero_mae]].map(box).join('')}</div>
+      <p class="dim" style="font-size:.78rem">${m.price.gana_a_baselines ? 'El modelo supera a los baselines de predecir cero y predecir la media.' : 'Atención: el modelo NO supera a los baselines.'}</p>`;
+  }
+  $('#metrics').innerHTML = html || '<div class="empty">Todavía no hay modelos entrenados. Ejecuta los scripts de entrenamiento.</div>';
+}
+
+/* ------------------------------------------------------------------ salud */
+async function health() {
+  try {
+    const h = await (await fetch('/api/health')).json();
+    $('#ncards').textContent = (h.index_cards || h.catalog_cards || 0).toLocaleString('es-CO');
+    const el = $('#health'), t = $('#healthtxt');
+    if (h.demo) { el.classList.add('warn'); t.textContent = 'MODO DEMO'; }
+    else { el.classList.remove('warn'); t.textContent = 'MODELOS ACTIVOS' + (h.temp_c ? ' · ' + h.temp_c + '°C' : ''); }
+  } catch (e) { $('#healthtxt').textContent = 'sin conexión'; }
+}
+
+moveGlider();
+health();
+setInterval(health, 20000);

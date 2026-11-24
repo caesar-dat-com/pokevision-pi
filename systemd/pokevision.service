@@ -1,0 +1,19 @@
+[Unit]
+Description=PokeVision Pi - vision + mercado de cartas Pokemon
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/pokevision-pi
+Environment=POKEVISION_THREADS=4
+Environment=OMP_NUM_THREADS=4
+ExecStart=/home/pi/pokevision-pi/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=4
+# la Pi 4 se calienta: limitamos para no tumbar el kiosco
+CPUQuota=380%
+
+[Install]
+WantedBy=multi-user.target

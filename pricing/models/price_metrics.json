@@ -1,0 +1,16 @@
+{
+  "entrenado": "2026-11-24T19:36:43.252024Z",
+  "muestras_train": 2072,
+  "muestras_test": 309,
+  "sets_train": 14,
+  "sets_test": 3,
+  "objetivo": "log(avg1/avg7) - movimiento semanal mas reciente",
+  "mae": 0.176079,
+  "r2": 0.15741,
+  "baseline_cero_mae": 0.17909,
+  "baseline_media_mae": 0.177522,
+  "acierto_direccion": 0.7323,
+  "resid_std": 0.246043,
+  "gana_a_baselines": true,
+  "fuente": "Cardmarket via TCGdex (avg1/avg7/avg30/trend/low)"
+}

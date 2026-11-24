@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#000244">
+<title>PokéVision Pi</title>
+<link rel="stylesheet" href="/static/css/app.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>⚡</text></svg>">
+</head>
+<body>
+
+<div class="shell">
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="mark">⚡</div>
+      <div>
+        <h1>PokéVision</h1>
+        <small>RASPBERRY PI 4 · VISIÓN + MERCADO</small>
+      </div>
+    </div>
+    <div class="spacer"></div>
+    <span class="pill" id="health"><span class="dot"></span><span id="healthtxt">conectando</span></span>
+    <button class="pill" id="calm" title="Reducir movimiento">◐ MOVIMIENTO</button>
+  </header>
+
+  <!-- ============================================================ ESCANEAR -->
+  <section class="view on" id="v-scan">
+    <div class="grid">
+      <div class="card">
+        <h3>Visor</h3>
+        <div class="viewer" id="viewer">
+          <video id="video" playsinline muted autoplay></video>
+          <div class="placeholder" id="vph">
+            Cámara apagada.<br>Pulsa <b>Activar cámara</b> o sube una imagen.
+          </div>
+          <div class="frameguide"><div class="box"><i></i><i></i><i></i><i></i></div></div>
+          <div class="scanline"></div>
+        </div>
+        <div class="controls">
+          <button class="btn primary" id="btn-scan">◉ Escanear carta</button>
+          <button class="btn" id="btn-cam">Activar cámara</button>
+          <button class="btn ghost" id="btn-file">Subir imagen</button>
+          <input type="file" id="file" accept="image/*" hidden>
+          <label class="switch"><input type="checkbox" id="auto"> Modo continuo</label>
+        </div>
+        <p class="dim" style="font-size:.78rem;margin:12px 0 0" id="hint">
+          Encuadra la carta dentro del marco. El modelo compara contra
+          <b id="ncards">—</b> cartas del catálogo.
+        </p>
+      </div>
+
+      <div class="card" id="result-card">
+        <h3>Resultado</h3>
+        <div id="result">
+          <div class="empty">Sin escaneos todavía.<br>El resultado aparece aquí en menos de un segundo.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:18px" id="alts-card" hidden>
+      <h3>Otras coincidencias</h3>
+      <div class="alts" id="alts"></div>
+    </div>
+  </section>
+
+  <!-- ============================================================ COLECCIÓN -->
+  <section class="view" id="v-col">
+    <div class="card">
+      <div style="display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap">
+        <div>
+          <span class="label">Valor de la colección</span>
+          <div class="price-hero"><div class="price-main" id="col-total">€0</div>
+            <div class="price-alt" id="col-cop">—</div></div>
+        </div>
+        <div class="spacer"></div>
+        <span class="chip lime" id="col-count">0 cartas</span>
+      </div>
+    </div>
+    <div class="card" style="margin-top:14px">
+      <h3>Mis cartas</h3>
+      <div class="list" id="col-list"><div class="empty">Colección vacía. Escanea una carta y pulsa «Guardar».</div></div>
+    </div>
+  </section>
+
+  <!-- ============================================================ MERCADO -->
+  <section class="view" id="v-market">
+    <div class="card">
+      <h3>Buscar en el mercado</h3>
+      <input type="search" id="q" placeholder="Nombre de la carta: Charizard, Pikachu, Mewtwo…" autocomplete="off">
+      <div class="list" id="results" style="margin-top:14px"></div>
+    </div>
+    <div class="card" style="margin-top:14px" id="market-detail" hidden>
+      <h3 id="md-name">—</h3>
+      <div class="price-hero">
+        <div class="price-main" id="md-price">€0</div>
+        <div class="price-alt" id="md-alt">—</div>
+        <div class="spacer"></div>
+        <span class="delta flat" id="md-delta">—</span>
+      </div>
+      <canvas id="chart"></canvas>
+      <div class="legend">
+        <span><i style="background:var(--blue-glow)"></i>Histórico real (30d → hoy)</span>
+        <span><i style="background:var(--lime)"></i>Predicción del modelo</span>
+        <span><i style="background:rgba(191,233,0,.25)"></i>Banda de incertidumbre</span>
+      </div>
+      <div class="price-grid" id="md-stats"></div>
+    </div>
+  </section>
+
+  <!-- ============================================================ MODELOS -->
+  <section class="view" id="v-models">
+    <div class="card">
+      <h3>Modelos entrenados</h3>
+      <p class="dim" style="font-size:.85rem;margin-top:0">
+        Métricas reales de este despliegue, leídas de los archivos de entrenamiento.
+      </p>
+      <div id="metrics"><div class="skel" style="height:120px"></div></div>
+    </div>
+    <div class="card" style="margin-top:14px">
+      <h3>Cómo decide si una carta es falsa</h3>
+      <ul class="notes">
+        <li><b>Bordes</b>: regularidad del troquelado y del marco amarillo.</li>
+        <li><b>Saturación</b>: las reimpresiones se desvían del color oficial.</li>
+        <li><b>Nitidez</b>: el texto de una falsa pierde filo al reimprimirse.</li>
+        <li><b>Esquinas</b>: blanqueo y desgaste, que afectan al valor de mercado.</li>
+      </ul>
+      <p class="dim" style="font-size:.78rem">
+        La red se entrenó con falsificaciones y daños sintéticos derivados de los escaneos
+        oficiales. Es una ayuda de cribado, no un peritaje.
+      </p>
+    </div>
+  </section>
+
+</div>
+
+<nav class="tabs" id="tabs">
+  <div class="glider"></div>
+  <button class="on" data-v="v-scan">ESCANEAR</button>
+  <button data-v="v-col">COLECCIÓN</button>
+  <button data-v="v-market">MERCADO</button>
+  <button data-v="v-models">MODELOS</button>
+</nav>
+
+<div class="toast" id="toast"></div>
+
+<script src="/static/js/chart.js"></script>
+<script src="/static/js/app.js"></script>
+</body>
+</html>

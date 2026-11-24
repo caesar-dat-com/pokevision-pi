@@ -379,7 +379,15 @@ function aiLive(d) {
   setTimeout(() => {
     panel.querySelectorAll('li').forEach(el => el.classList.replace('run', 'done'));
     panel.classList.remove('busy');
-    $('#ai-ms').textContent = (d.pipeline && d.pipeline.ms != null ? d.pipeline.ms : d.ms) + ' ms';
+    // contador que sube y clava en el numero real (AAA feel, sin layout thrash)
+    const total = (d.pipeline && d.pipeline.ms != null ? d.pipeline.ms : d.ms) || 0;
+    const t0m = performance.now(), dur = 620;
+    const tickMs = (t) => {
+      const k = Math.min(1, (t - t0m) / dur), e = 1 - Math.pow(1 - k, 3);
+      $('#ai-ms').textContent = Math.round(total * e) + ' ms';
+      if (k < 1) requestAnimationFrame(tickMs);
+    };
+    requestAnimationFrame(tickMs);
     // top-3
     const top = (d.pipeline && d.pipeline.top) || [];
     [1, 2, 3].forEach((n, ix) => {

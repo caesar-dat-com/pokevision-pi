@@ -37,6 +37,8 @@ h3{font-size:1.15rem}
 /* ---------------------------------------------------------------- estructura */
 .shell{max-width:1480px;margin:0 auto;padding:18px 20px 120px}
 .topbar{display:flex;align-items:center;gap:14px;padding:6px 2px 18px}
+.brand .sub{display:block;font-size:.58rem;letter-spacing:.3em;color:var(--ink-faint);
+  text-transform:uppercase;margin-top:1px;font-weight:800}
 .brand{display:flex;align-items:center;gap:11px}
 .brand .mark{
   width:40px;height:40px;border-radius:12px;display:grid;place-items:center;
@@ -446,7 +448,9 @@ body.scrolled .topbar{background:rgba(var(--shade-rgb),.45);border-bottom:1px so
   padding:4px 8px;border-radius:10px;font-size:.78rem;color:var(--ink-dim);
   transition:background .25s,color .25s,transform .25s}
 .ai-steps li b{font-weight:800;color:var(--ink-dim);transition:color .25s}
-.ai-steps li small{font-size:.68rem;color:var(--ink-faint)}
+.ai-steps li small{font-size:.68rem;color:var(--ink-dim);opacity:.92}
+.ai-ms{font-size:.82rem}
+.ai-steps li.run small{color:var(--ink)}
 .ai-steps li i{width:8px;height:8px;border-radius:50%;background:var(--line-2);justify-self:end;
   transition:background .25s,box-shadow .25s,scale .25s}
 .ai-steps li.run{background:rgba(var(--lime-pop),.10);transform:translateX(3px)}
@@ -488,6 +492,55 @@ body.scrolled .topbar{background:rgba(var(--shade-rgb),.45);border-bottom:1px so
   animation:pulse 1s infinite}
 .ex-card small{display:block;font-size:.64rem;color:var(--ink-faint);margin-top:4px;
   max-width:92px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* =================================================================
+   LENGUAJE WUWA × POKÉVISION — capa "terminal de resonador"
+   De las capturas del juego (Data Dock / Echo Gallery / Terminal):
+   chamfer diagonal en esquinas, brackets HUD, divisores con fade,
+   títulos TRACKING-AMPLIO MAYÚSCULAS, oro = valor, plata = estándar.
+   ================================================================= */
+
+/* -- chamfer universal: paneles con corte diagonal (la firma WuWa) -- */
+.chamfer{clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px)}
+.ai-live,.ex-dock,.psa-card,.alts-card{clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px)}
+
+/* -- brackets HUD en las esquinas del visor (visor de escaneo del juego) -- */
+.viewer .frameguide .box i{background:transparent!important;border-color:var(--lime-pop)}
+.viewer .frameguide .box i{width:26px!important;height:26px!important;border-width:3px}
+
+/* -- títulos con tracking amplio + filete que se desvanece (Data Dock) -- */
+.ai-head h4,.ex-head h4{letter-spacing:.22em;font-weight:800}
+.ai-live::before,.ex-dock::before{content:'';position:absolute;left:16px;right:16px;top:44px;height:1px;
+  background:linear-gradient(90deg,transparent,var(--line-2) 18%,var(--line-2) 82%,transparent);pointer-events:none}
+
+/* -- chip IA con corte diagonal, no redondo -- */
+.ai-chip{border-radius:4px 10px 4px 10px;clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px)}
+
+/* -- barras top-3: rectas, glow suave, número X/Y estilo Echo Gallery -- */
+.ai-bar{border-radius:3px}
+.ai-bar i{border-radius:2px;box-shadow:0 0 10px rgba(var(--lime-pop),.25)}
+.ai-bar em{font-family:ui-monospace,'SF Mono',monospace;letter-spacing:.02em}
+
+/* -- oro para el valor (WuWa: oro = alta valía, plata = estándar) -- */
+.price-main,.price-hero{letter-spacing:.02em}
+.grade-gem .g{color:#f9c846;text-shadow:0 0 12px rgba(249,200,70,.35)}
+
+/* -- rombo rojo de notificación en la pestaña del teléfono (Terminal) -- */
+.pill{position:relative}
+#qr-link::after{content:'';position:absolute;top:-3px;right:-3px;width:8px;height:8px;
+  background:var(--danger);transform:rotate(45deg);border-radius:1px;
+  animation:pulse 2.4s infinite}
+
+/* -- celdas de cartas ejemplo: chamfer + marco "???" estilo Echo Gallery -- */
+.ex-card img{border-radius:5px}
+.ex-card{clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px)}
+.ex-card.playing img{box-shadow:0 0 0 2px #f9c846,0 0 18px rgba(249,200,70,.45)}
+
+/* -- glass mas profundo (paneles ~70% como el juego) -- */
+.ai-live{background:linear-gradient(150deg,rgba(var(--fg-rgb),.10),rgba(var(--fg-rgb),.03) 55%);
+  box-shadow:inset 0 0 0 1px rgba(var(--shade-rgb),.06),inset 0 1px 0 rgba(var(--shade-rgb),.08)}
+.ex-dock{box-shadow:inset 0 0 0 1px rgba(var(--shade-rgb),.06),inset 0 1px 0 rgba(var(--shade-rgb),.08)}
+.ex-dock{background:linear-gradient(200deg,rgba(var(--fg-rgb),.09),rgba(var(--fg-rgb),.03) 60%)}
 
 @media (prefers-reduced-motion: reduce){
 .aurora,#sparkles{display:none}

@@ -62,6 +62,42 @@
           Encuadra la carta dentro del marco. El modelo compara contra
           <b id="ncards">—</b> cartas del catálogo.
         </p>
+
+        <!-- ================= IA EN VIVO: el pipeline contado paso a paso ================= -->
+        <div class="ai-live" id="ai-live" aria-live="polite">
+          <div class="ai-head">
+            <span class="ai-chip" id="ai-chip">IA</span>
+            <h4>Procesando en vivo</h4>
+            <span class="ai-ms" id="ai-ms">—</span>
+          </div>
+          <ol class="ai-steps" id="ai-steps">
+            <li data-step="frame">     <b>Frame</b>        <small>captura del visor</small>        <i></i></li>
+            <li data-step="pre">       <b>Preprocesado</b> <small>224×160 · normaliza</small>      <i></i></li>
+            <li data-step="embed">     <b>Embedder</b>     <small>MobileNetV3 → vector 256</small><i></i></li>
+            <li data-step="search">    <b>Búsqueda</b>     <small>índice de 4.198 cartas</small>  <i></i></li>
+            <li data-step="condition"> <b>Estado</b>      <small>auténtica · falsa · dañada</small><i></i></li>
+            <li data-step="grade">     <b>PSA</b>          <small>centrado · esquinas · bordes</small><i></i></li>
+            <li data-step="price">     <b>Mercado</b>      <small>precio + proyección 30/90/180</small><i></i></li>
+          </ol>
+          <div class="ai-bars">
+            <span class="ai-bar" id="bar-top1"><i style="width:0%"></i><em>—</em></span>
+            <span class="ai-bar" id="bar-top2"><i style="width:0%"></i><em>—</em></span>
+            <span class="ai-bar" id="bar-top3"><i style="width:0%"></i><em>—</em></span>
+          </div>
+          <p class="ai-note dim" id="ai-note">En reposo. Escanea una carta y mira el pipeline andar.</p>
+        </div>
+
+        <!-- ================= CARTAS EJEMPLO (demo sin cámara) ================= -->
+        <div class="ex-dock" id="ex-dock">
+          <div class="ex-head">
+            <h4>Cartas de ejemplo</h4>
+            <button class="pill" id="tour-btn" title="Escanea las cartas ejemplo una a una">▶ PRESENTACIÓN</button>
+          </div>
+          <div class="ex-strip" id="ex-strip"></div>
+          <p class="dim" style="font-size:.72rem;margin:8px 0 0">
+            Toca una para escanearla · ▶ para verlas todas como en el torneo
+          </p>
+        </div>
       </div>
 
       <div class="card" id="result-card">

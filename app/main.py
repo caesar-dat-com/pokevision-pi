@@ -14,7 +14,7 @@ import random
 import time
 
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -248,26 +248,81 @@ async def grade_only(file: UploadFile = File(...)):
     return grade_report(geometric_subgrades(img))
 
 
+@app.get("/api/examples")
+async def examples():
+    """Cartas de ejemplo para ensayar la interfaz sin camara: ids REALES del
+    catalogo, con imagen y precio conocidos. 12 de las mas valiosas + 12
+    variadas para que cada escaneo de demo muestre un caso distinto."""
+    with_img = [c for c in CARDS if c.get("image")]
+    def eur(c):
+        try: return float((c.get("pricing", {}).get("cardmarket") or {}).get("avg1") or 0)
+        except Exception: return 0.0
+    # 12 mas caras (los resultados lucen) y 12 con rarezas distintas (variedad)
+    top = sorted(with_img, key=eur, reverse=True)[:12]
+    seen = {c["id"] for c in top}
+    var = []
+    for c in with_img:
+        if c["id"] in seen: continue
+        r = (c.get("rarity") or "").lower()
+        if any(k in r for k in ("illustration", "ultra", "special", "hyper", "promo")):
+            var.append(c)
+        if len(var) >= 12: break
+    # data/images ya tiene TODAS las cartas descargadas (el dataset):
+    # el dock las sirve locales, sin internet ni CORS.
+    here = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                        "data", "images")
+    out = []
+    for c in (top + var)[:24]:
+        fname = c["id"].replace("/", "-") + ".webp"
+        path = os.path.join(here, fname)
+        if not os.path.exists(path):
+            continue
+        out.append({"id": c["id"], "name": c["name"],
+                    "set_name": c.get("set_name", ""),
+                    "image": "/api/cardimg/" + fname, "rarity": c.get("rarity", "")})
+    return {"cards": out}
+
+
+@app.get("/api/cardimg/{fname}")
+async def card_image(fname: str):
+    """Carta del dataset local (data/images). Solo nombre seguro."""
+    import re as _re
+    if not _re.fullmatch(r"[\w.-]+\.webp", fname):
+        raise HTTPException(400, "nombre no valido")
+    path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                        "data", "images", fname)
+    if not os.path.exists(path):
+        raise HTTPException(404, "no existe")
+    return FileResponse(path, media_type="image/webp",
+                        headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/api/img")
+async def img_proxy(u: str):
+    """Trae la imagen de TCGdex desde el SERVIDOR: la Pi tiene cache/internet
+    y evita el bloqueo CORS del navegador del laptop. Solo permite tcgdex."""
+    if not u.startswith("https://assets.tcgdex.net/"):
+        raise HTTPException(403, "solo tcgdex")
+    import urllib.request
+    try:
+        with urllib.request.urlopen(urllib.request.Request(u, headers={"User-Agent": "pokevision"}), timeout=15) as r:
+            data = r.read()
+        return Response(data, media_type="image/webp",
+                        headers={"Cache-Control": "public, max-age=86400"})
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"no pude bajar la imagen: {e}")
+
+
 @app.post("/api/scan")
 async def scan(file: UploadFile = File(...)):
     blob = await file.read()
     if not blob:
         raise HTTPException(400, "imagen vacia")
-    # ultima carta escaneada: la pagina QR del telefono la muestra en vivo
-    try:
-        r0 = (PIPE.analyze(blob) if PIPE is not None else scan_demo(blob))
-        mini = {"id": r0.get("card", {}).get("id"), "name": r0.get("card", {}).get("name"),
-                "set_name": r0.get("card", {}).get("set_name"),
-                "image": r0.get("card", {}).get("image"),
-                "eur": (r0.get("price") or {}).get("eur")}
-        with open(_LAST_SCAN_FILE + ".tmp", "w") as f:
-            json.dump(mini, f)
-        os.replace(_LAST_SCAN_FILE + ".tmp", _LAST_SCAN_FILE)
-    except Exception:  # noqa: BLE001
-        pass
     if PIPE is None:
         r = demo_result(blob)
         return JSONResponse(r)
+    # UNA sola inferencia; de aqui salen el resultado, el desglose del panel
+    # "IA en vivo" y la miniatura para la pantalla QR del telefono.
     t0 = time.time()
     try:
         res = PIPE.analyze(blob)
@@ -280,6 +335,26 @@ async def scan(file: UploadFile = File(...)):
     for a in res.get("alternatives", []):
         if a.get("image") and not a["image"].endswith(".webp"):
             a["image"] += "/low.webp"
+    # desglose "IA en vivo": pasos con ms reales + top-3 de coincidencias
+    try:
+        cands = ([res.get("card")] if res.get("card") else []) + (res.get("alternatives") or [])
+        res["pipeline"] = {"ms": res.get("ms"),
+                           "steps": getattr(PIPE, "last_steps", None),
+                           "top": [(c.get("name"), c.get("match_score"))
+                                   for c in cands[:3]]}
+    except Exception:  # noqa: BLE001
+        pass
+    # miniatura en vivo para el QR del telefono fijo
+    try:
+        mini = {"id": res.get("card", {}).get("id"), "name": res.get("card", {}).get("name"),
+                "set_name": res.get("card", {}).get("set_name"),
+                "image": res.get("card", {}).get("image"),
+                "eur": (res.get("price") or {}).get("eur")}
+        with open(_LAST_SCAN_FILE + ".tmp", "w") as f:
+            json.dump(mini, f)
+        os.replace(_LAST_SCAN_FILE + ".tmp", _LAST_SCAN_FILE)
+    except Exception:  # noqa: BLE001
+        pass
     return JSONResponse(res)
 
 

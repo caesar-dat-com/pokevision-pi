@@ -73,6 +73,9 @@ addEventListener('scroll', () => {
   document.body.classList.toggle('scrolled', scrollY > 24);
 }, { passive: true });
 
+$('#tour-btn').addEventListener('click', playTour);
+loadExamples();
+
 $('#qr-link').addEventListener('click', () => {
   window.open('/qr', '_blank');
   toast('Abre esa URL en el teléfono fijo');
@@ -201,6 +204,7 @@ async function scan() {
 async function sendBlob(blob) {
   if (BUSY) return;
   BUSY = true;
+  aiLiveReset();
   $('#viewer').classList.add('scanning');
   $('#result').innerHTML = skeleton();
   const fd = new FormData();
@@ -326,6 +330,7 @@ function render(d) {
       </div>
     </div>`;
 
+  aiLive(d);
   makeFlippable();
   speak(d);
   tween($('#pmain'), p.eur || 0, '€', 2);
@@ -348,6 +353,109 @@ function render(d) {
     </button>`).join('');
   $$('#alts .alt').forEach(b => b.addEventListener('click',
     () => { show('v-market'); openCard(b.dataset.id); }));
+}
+
+/* --------------------------------------------- IA EN VIVO: el pipeline andando
+   Cada paso se enciende cuando la respuesta dice que corrio, con su ms REAL
+   medido en la Pi, y el top-3 de coincidencias se dibuja en barras. */
+function aiLive(d) {
+  const panel = $('#ai-live');
+  if (!panel) return;
+  const steps = (d.pipeline && d.pipeline.steps) || {};
+  const order = ['frame','pre','embed','search','condition','grade','price'];
+  panel.classList.add('busy');
+  $('#ai-ms').textContent = '—';
+  let i = 0;
+  const li = (k) => panel.querySelector(`li[data-step="${k}"]`);
+  // encendido secuencial: cada etapa tarda lo que tardo de verdad (minimo 90ms)
+  order.forEach((k, n) => {
+    const el = li(k); if (!el) return;
+    setTimeout(() => {
+      el.classList.add('run');
+      const ms = steps[k];
+      if (ms != null) el.querySelector('small').textContent += ` · ${ms} ms`;
+    }, i = n * 110);
+  });
+  setTimeout(() => {
+    panel.querySelectorAll('li').forEach(el => el.classList.replace('run', 'done'));
+    panel.classList.remove('busy');
+    $('#ai-ms').textContent = (d.pipeline && d.pipeline.ms != null ? d.pipeline.ms : d.ms) + ' ms';
+    // top-3
+    const top = (d.pipeline && d.pipeline.top) || [];
+    [1, 2, 3].forEach((n, ix) => {
+      const bar = $('#bar-top' + n);
+      if (!bar) return;
+      const m = top[ix];
+      if (m) {
+        bar.querySelector('i').style.width = Math.min(100, (m[1] * 100).toFixed(1)) + '%';
+        bar.querySelector('em').textContent = `${m[0]} · ${(m[1] * 100).toFixed(1)}%`;
+      }
+    });
+    const note = $('#ai-note');
+    if (note) note.textContent = d.ok
+      ? `Identificada en ${d.ms} ms con ${(d.condition.confidence * 100) | 0}% de confianza en el estado.`
+      : 'Sin coincidencia razonable en el catálogo.';
+  }, order.length * 110 + 260);
+}
+
+function aiLiveReset() {
+  const panel = $('#ai-live');
+  if (!panel) return;
+  panel.classList.remove('busy');
+  panel.querySelectorAll('li').forEach(el => el.classList.remove('run', 'done'));
+  [1, 2, 3].forEach(n => { const b = $('#bar-top' + n);
+    if (b) { b.querySelector('i').style.width = '0%'; b.querySelector('em').textContent = '—'; } });
+  $('#ai-ms').textContent = '—';
+}
+
+/* ------------------------------------------- CARTAS EJEMPLO + presentación
+   /api/examples trae ids REALES del catalogo: al escanearlas pasa por todo el
+   pipeline de verdad (embedder, condicion, PSA, mercado). La presentación las
+   pasa una a una con el visor encendido, como si el torneo estuviera andando. */
+let EX_CARDS = [], TOUR = null;
+
+async function loadExamples() {
+  const d = await fetch('/api/examples').then(r => r.json()).catch(() => null);
+  const strip = $('#ex-strip');
+  if (!d || !d.cards || !d.cards.length) { strip.textContent = 'sin ejemplos'; return; }
+  EX_CARDS = d.cards;
+  strip.innerHTML = EX_CARDS.map((c, i) => `
+    <button class="ex-card" data-i="${i}" title="${c.name}">
+      <img src="${c.image}" alt="${c.name}" loading="lazy">
+      <small>${c.name}</small>
+    </button>`).join('');
+  strip.querySelectorAll('.ex-card').forEach(b =>
+    b.addEventListener('click', () => scanExample(+b.dataset.i)));
+}
+
+async function scanExample(i) {
+  const c = EX_CARDS[i];
+  if (!c) return;
+  [...document.querySelectorAll('.ex-card')].forEach(el => el.classList.remove('playing'));
+  const el = document.querySelector(`.ex-card[data-i="${i}"]`);
+  if (el) { el.classList.add('playing'); el.scrollIntoView({block:'nearest',inline:'center',behavior:'smooth'}); }
+  // descarga la imagen y la mete por el MISMO camino que la camara
+  const b = await fetch(c.image).then(r => r.blob());
+  await sendBlob(new File([b], c.id + '.webp', {type: 'image/webp'}));
+}
+
+async function playTour() {
+  if (TOUR) { stopTour(); return; }
+  const btn = $('#tour-btn');
+  TOUR = setInterval(() => {
+    const i = Math.floor(Math.random() * EX_CARDS.length);
+    scanExample(i);
+  }, 7000);
+  btn.textContent = '■ PARAR';
+  btn.classList.add('primary');
+  scanExample(0);
+}
+
+function stopTour() {
+  if (TOUR) clearInterval(TOUR);
+  TOUR = null;
+  const btn = $('#tour-btn');
+  if (btn) { btn.textContent = '▶ PRESENTACIÓN'; btn.classList.remove('primary'); }
 }
 
 /* ----------------------------------------------- girar la carta (TCG Pocket)

@@ -256,18 +256,47 @@ class Pipeline:
 
     # ------------------------------------------------------------------ todo junto
     def analyze(self, image_bytes: bytes):
+        """Inferencia completa con desglose de tiempos para el panel 'IA en vivo'.
+
+        self.last_steps queda asi: {"embed": 45, "search": 2, ...} en ms.
+        El panel de la interfaz cuenta el pipeline paso a paso con estos numeros
+        REALES, no una animacion decorativa.
+        """
         t0 = time.time()
+        steps = {}
+
         img = Image.open(io.BytesIO(image_bytes))
-        matches = self.identify(img)
-        cond = self.condition(img)
+        steps["frame"] = int((time.time() - t0) * 1000)
+
+        t = time.time(); x = preprocess(img)
+        steps["pre"] = int((time.time() - t) * 1000)
+
+        t = time.time()
+        z = self.emb.run(None, {"input": x})[0][0]
+        z = z / (np.linalg.norm(z) + 1e-9)
+        sims = self.index @ z
+        idx = np.argsort(-sims)[:4]
+        steps["embed"] = int((time.time() - t) * 1000)
+
+        t = time.time()
+        matches = [dict(self.meta[int(i)], match_score=round(float(sims[int(i)]), 4))
+                   for i in idx]
         best = matches[0] if matches else None
+        steps["search"] = int((time.time() - t) * 1000)
+
+        t = time.time(); cond = self.condition(img)
+        steps["condition"] = int((time.time() - t) * 1000)
+
         res = {"ok": bool(best), "ms": int((time.time() - t0) * 1000),
                "card": best, "alternatives": matches[1:], "condition": cond}
         if best:
+            t = time.time()
             res["price"] = self.price_block(best["id"])
+            steps["price"] = int((time.time() - t) * 1000)
             res["forecast"] = self.forecast(best["id"])
             res["grade"] = self.grade(img, res["price"].get("eur"))
         else:
             res["grade"] = self.grade(img)
         res["ms"] = int((time.time() - t0) * 1000)
+        self.last_steps = steps
         return res

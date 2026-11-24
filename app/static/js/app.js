@@ -171,7 +171,7 @@ function render(d) {
         <span class="label">Valor actual</span>
         <div class="price-hero">
           <div class="price-main" id="pmain">€0.00</div>
-          <div class="price-alt">${p.usd ? '$' + p.usd + ' · ' : ''}${p.cop ? '$' + p.cop.toLocaleString('es-CO') + ' COP' : ''}</div>
+          <div class="price-alt">${p.usd ? '$' + p.usd + ' · ' : ''}${p.cop ? p.cop.toLocaleString('es-CO') + ' COP' : ''}</div>
           <div class="spacer"></div>
           ${f ? `<span class="delta ${dirClass}">${arrow} ${f.change_pct_180d > 0 ? '+' : ''}${f.change_pct_180d}% a 180 días</span>` : ''}
         </div>
@@ -209,6 +209,8 @@ function render(d) {
         <ul class="notes">${(cond.notes || []).map(n => `<li>${n}</li>`).join('')}</ul>
       </div>
 
+      ${gradeBlock(d.grade, p.eur)}
+
       <div class="controls" style="margin-top:18px">
         <button class="btn primary" id="btn-save">＋ Guardar en colección</button>
         <button class="btn" id="btn-market">Ver mercado</button>
@@ -236,6 +238,57 @@ function render(d) {
     </button>`).join('');
   $$('#alts .alt').forEach(b => b.addEventListener('click',
     () => { show('v-market'); openCard(b.dataset.id); }));
+}
+
+/* ------------------------------------------------- calificación tipo PSA */
+function gradeBlock(g, eur) {
+  if (!g || g.psa == null) return '';
+  const psa = g.psa;
+  const tone = psa >= 9.5 ? 'gem' : psa >= 8.5 ? 'high' : psa >= 7 ? 'mid' : 'low';
+  const sub = g.subgrades || {};
+  const worth = g.worth_grading;
+  return `
+    <div class="psa" data-tone="${tone}" style="margin-top:20px">
+      <div class="psa-head">
+        <div class="psa-slab">
+          <span class="psa-brand">PSA</span>
+          <span class="psa-num">${Number.isInteger(psa) ? psa : psa.toFixed(1)}</span>
+        </div>
+        <div>
+          <span class="label">Calificación estimada</span>
+          <h3 class="psa-label">${g.label || ''}</h3>
+          <small class="dim">${g.note || ''}</small>
+        </div>
+      </div>
+      <div class="psa-sub">
+        ${['centrado', 'esquinas', 'bordes', 'superficie'].map(k => {
+          const v = sub[k];
+          if (v == null) return '';
+          const pct = Math.max(0, Math.min(1, (v - 1) / 9));
+          const lim = g.limiting_factor === k;
+          return `<div class="sg${lim ? ' lim' : ''}">
+            <span class="label">${k}${lim ? ' ·' : ''}</span>
+            <b>${Number(v).toFixed(1)}</b>
+            <span class="track"><span class="fill" data-v="${pct}"></span></span>
+          </div>`;
+        }).join('')}
+      </div>
+      ${g.centering_pct ? `<p class="dim psa-meta">Centrado medido <b>${g.centering_pct}</b>${g.detail ? ' · ' + g.detail : ''}</p>` : ''}
+      ${g.value_if_graded ? `
+        <div class="psa-value">
+          <div class="stat"><span class="label">En bruto</span><b>${fmt(eur)}</b></div>
+          <div class="stat"><span class="label">PSA 10</span><b class="lime">${fmt(g.value_if_graded.psa10)}</b></div>
+          <div class="stat"><span class="label">PSA 9</span><b>${fmt(g.value_if_graded.psa9)}</b></div>
+          <div class="stat"><span class="label">A tu grado</span><b>${fmt(g.value_at_estimate)}</b></div>
+        </div>
+        <p class="psa-verdict ${worth ? 'yes' : 'no'}">
+          ${worth ? '✓ Compensa graduarla' : '✕ No compensa graduarla'}
+          <span class="dim">· neto ${g.net_gain_eur > 0 ? '+' : ''}${fmt(g.net_gain_eur)} tras ${fmt(g.grading_cost_eur)} de servicio</span>
+        </p>` : ''}
+      <small class="dim" style="display:block;margin-top:8px;font-size:.72rem">
+        Pre-grading orientativo · ${g.fuente || ''}
+      </small>
+    </div>`;
 }
 
 /* brillo holográfico que sigue al dedo/puntero */
@@ -270,7 +323,7 @@ async function addToCollection(id, cond) {
 async function loadCollection() {
   const d = await (await fetch('/api/collection')).json();
   tween($('#col-total'), d.total_eur || 0, '€', 2);
-  $('#col-cop').textContent = d.total_cop ? '$' + d.total_cop.toLocaleString('es-CO') + ' COP' : '—';
+  $('#col-cop').textContent = d.total_cop ? d.total_cop.toLocaleString('es-CO') + ' COP' : '—';
   const n = (d.items || []).reduce((a, b) => a + (b.qty || 1), 0);
   $('#col-count').textContent = n + (n === 1 ? ' carta' : ' cartas');
   $('#col-list').innerHTML = (d.items || []).length ? d.items.map(i => `
@@ -355,6 +408,17 @@ async function loadMetrics() {
         ['F1 auténtica', (pc.autentica ? pc.autentica.f1 : '—')],
         ['F1 falsa', (pc.falsa ? pc.falsa.f1 : '—')],
         ['F1 dañada', (pc.danada ? pc.danada.f1 : '—')]].map(box).join('')}</div>`;
+  }
+  if (m.grade) {
+    const eje = m.grade.mae_por_eje || {}, cor = m.grade.correlacion_por_eje || {};
+    html += `<h3 style="margin-top:18px">Calificación PSA</h3>
+      <p class="dim" style="font-size:.82rem;margin:4px 0 10px">Desgaste sintético de severidad conocida (etiqueta = 10 − 9·severidad). Split por carta.</p>
+      <div class="price-grid">${[['MAE', m.grade.test_mae_grades + ' grados'],
+        ['dentro de ±1', (m.grade.within_1_grade * 100).toFixed(1) + '%'],
+        ['baseline MAE', m.grade.baseline_predecir_media_mae],
+        ['cartas test', m.grade.cartas_test]].map(box).join('')}</div>
+      <div class="price-grid" style="margin-top:8px">${Object.keys(eje).map(k =>
+        box([k, (eje[k] ?? '—') + (cor[k] != null ? ' · r=' + cor[k] : '')])).join('')}</div>`;
   }
   if (m.price) {
     html += `<h3 style="margin-top:18px">Predicción de valor</h3>

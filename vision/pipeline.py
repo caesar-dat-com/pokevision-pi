@@ -92,6 +92,10 @@ class Pipeline:
         self.cond = (ort.InferenceSession(cond_path, so,
                                           providers=["CPUExecutionProvider"])
                      if os.path.exists(cond_path) else None)
+        grade_path = os.path.join(models_dir, "grade.onnx")
+        self.grade_net = (ort.InferenceSession(grade_path, so,
+                                               providers=["CPUExecutionProvider"])
+                          if os.path.exists(grade_path) else None)
         self.index = np.load(os.path.join(models_dir, "index.npy"))
         with open(os.path.join(models_dir, "index_meta.json")) as f:
             self.meta = json.load(f)
@@ -167,6 +171,29 @@ class Pipeline:
             n.insert(0, "La red detecta dano fisico que afecta el valor")
         return n
 
+    # ------------------------------------------------------------------ grado PSA
+    def grade(self, img: Image.Image, price_eur=None):
+        """Pre-grading tipo PSA: centrado medido + subgrados estimados por la red."""
+        from vision.grading import geometric_subgrades, grade_report
+
+        sub = geometric_subgrades(img)
+        if self.grade_net is not None:
+            out = self.grade_net.run(None, {"input": preprocess(img)})[0][0]
+            net = np.clip(out, 1, 10)
+            # el centrado se queda con la medida geometrica (es exacta y auditable);
+            # los otros tres los estima la red, que ve el desgaste mejor que una
+            # heuristica de varianza
+            for i, k in enumerate(("centrado", "esquinas", "bordes", "superficie")):
+                if k == "centrado":
+                    continue
+                sub[k] = round(float(net[i]), 1)
+            sub["_fuente"] = "centrado geometrico + red mobilenetv3"
+        else:
+            sub["_fuente"] = "solo medidas geometricas (red de grado no entrenada)"
+        rep = grade_report(sub, price_eur)
+        rep["fuente"] = sub["_fuente"]
+        return rep
+
     # ------------------------------------------------------------------ precio
     def price_block(self, card_id):
         c = self.cards.get(card_id, {})
@@ -239,4 +266,8 @@ class Pipeline:
         if best:
             res["price"] = self.price_block(best["id"])
             res["forecast"] = self.forecast(best["id"])
+            res["grade"] = self.grade(img, res["price"].get("eur"))
+        else:
+            res["grade"] = self.grade(img)
+        res["ms"] = int((time.time() - t0) * 1000)
         return res

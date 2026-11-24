@@ -33,7 +33,13 @@
         <div class="viewer" id="viewer">
           <video id="video" playsinline muted autoplay></video>
           <div class="placeholder" id="vph">
-            Cámara apagada.<br>Pulsa <b>Activar cámara</b> o sube una imagen.
+            <svg width="72" height="72" viewBox="0 0 24 24" fill="none"
+                 stroke="rgba(191,233,0,.55)" stroke-width="1.3" aria-hidden="true">
+              <rect x="2" y="6" width="20" height="14" rx="3"/>
+              <circle cx="12" cy="13" r="4"/><path d="M8 6l1.6-2.4h4.8L16 6"/>
+            </svg>
+            <div style="margin-top:12px">Visor en espera</div>
+            <small style="color:var(--ink-faint)">Enciende la cámara o sube una imagen desde los botones de abajo</small>
           </div>
           <div class="frameguide"><div class="box"><i></i><i></i><i></i><i></i></div></div>
           <div class="scanline"></div>

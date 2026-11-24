@@ -1,0 +1,5 @@
+cards_eval=600
+recall@1=1.0000
+recall@5=1.0000
+epochs=6
+images=4198

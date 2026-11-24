@@ -89,7 +89,10 @@ def demo_result(seed_bytes: bytes):
     rate = rnd.uniform(-0.05, 0.12)
     fc_eur = [round(eur * (1 + rate * k), 2) for k in (1, 2.2, 3.4)]
     verdict = rnd.choices(["autentica", "sospechosa", "danada"], [0.72, 0.12, 0.16])[0]
-    conf = rnd.uniform(0.62, 0.95)
+    # la confianza tiene que ser coherente con el veredicto: "sospechosa" es, por
+    # definicion, una deteccion insegura; no puede salir al 95%
+    conf = rnd.uniform(0.78, 0.96) if verdict == "autentica" else (
+        rnd.uniform(0.45, 0.6) if verdict == "sospechosa" else rnd.uniform(0.66, 0.88))
     return {
         "ok": True, "demo": True, "ms": rnd.randint(180, 520),
         "card": {"id": card["id"], "name": card.get("name"),
@@ -122,7 +125,25 @@ def demo_result(seed_bytes: bytes):
                                   for k in ("bordes", "saturacion", "nitidez", "esquinas")},
                       "modelo": "demo",
                       "notes": ["Modo demo: los modelos aun no estan entrenados"]},
+        "grade": grade_demo(seed_bytes, eur),
     }
+
+
+def grade_demo(blob: bytes, eur: float):
+    """En modo demo el grado NO se inventa: el centrado y el desgaste se miden
+    de verdad sobre la imagen subida. Lo unico que falta es la red de subgrados."""
+    try:
+        import io
+
+        from PIL import Image
+
+        from vision.grading import geometric_subgrades, grade_report
+
+        rep = grade_report(geometric_subgrades(Image.open(io.BytesIO(blob))), eur)
+        rep["fuente"] = "medidas geometricas sobre la imagen (sin red de grado)"
+        return rep
+    except Exception as e:  # noqa: BLE001
+        return {"psa": None, "error": str(e)}
 
 
 # -------------------------------------------------------------------- paginas
@@ -145,6 +166,7 @@ def health():
     metrics = {}
     for name, path in (
         ("condition", os.path.join(ROOT, "vision/models/condition_metrics.json")),
+        ("grade", os.path.join(ROOT, "vision/models/grade_metrics.json")),
         ("price", os.path.join(ROOT, "pricing/models/price_metrics.json")),
     ):
         try:
@@ -160,6 +182,23 @@ def health():
     return {"ok": True, "demo": PIPE is None, "error": PIPE_ERROR,
             "index_cards": len(PIPE.meta) if PIPE else 0,
             "catalog_cards": len(CARDS), "temp_c": temp, "metrics": metrics}
+
+
+@app.post("/api/grade")
+async def grade_only(file: UploadFile = File(...)):
+    """Solo pre-grading PSA, sin identificar la carta (mas rapido)."""
+    blob = await file.read()
+    if not blob:
+        raise HTTPException(400, "imagen vacia")
+    import io
+
+    from PIL import Image
+
+    img = Image.open(io.BytesIO(blob))
+    if PIPE is not None:
+        return PIPE.grade(img)
+    from vision.grading import geometric_subgrades, grade_report
+    return grade_report(geometric_subgrades(img))
 
 
 @app.post("/api/scan")

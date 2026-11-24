@@ -20,7 +20,8 @@ falsas/dañadas, y la interfaz se rehace para pantalla táctil.
 |---|---|---|---|
 | 1 | **Identificador** | Dice *qué carta* es, entre miles | MobileNetV3-Small + aprendizaje contrastivo (NT-Xent). Cada carta genera dos "fotos" distintas de sí misma y la red aprende a reconocerlas como la misma |
 | 2 | **Autenticidad y estado** | auténtica / falsa / dañada + indicios | MobileNetV3-Small, 3 clases, con falsificaciones y desgaste sintéticos derivados del escaneo oficial |
-| 3 | **Valor futuro** | Proyección a 30/90/180 días con banda | HistGradientBoosting sobre la serie real de Cardmarket (avg30 → avg7 → avg1) |
+| 3 | **Calificación PSA** | Pre-grading 1-10 + los 4 subgrados | MobileNetV3-Small sobre desgaste sintético de severidad conocida |
+| 4 | **Valor futuro** | Proyección a 30/90/180 días con banda | HistGradientBoosting sobre la serie real de Cardmarket (avg30 → avg7 → avg1) |
 
 ### Métricas reales de este repositorio
 
@@ -35,6 +36,49 @@ pricing   objetivo log(avg1/avg7) · split POR SET (ningún set en train y test 
 
 Las métricas de visión quedan en `vision/models/embedder_metrics.txt` y
 `vision/models/condition_metrics.json` al terminar el entrenamiento.
+
+---
+
+## Calificación tipo PSA
+
+PSA puntúa una carta de 1 a 10 mirando cuatro cosas: **centrado, esquinas, bordes y
+superficie**. El proyecto estima las cuatro y aplica la regla real de PSA — *el grado
+global no puede superar en más de un punto al peor subgrado*: una esquina rota hunde la
+carta aunque el resto sea perfecto.
+
+**Centrado**: se mide con geometría, no se adivina. Se localiza el marco amarillo dentro
+del borde de la carta y se calcula el reparto de márgenes izquierda/derecha y
+arriba/abajo, que es exactamente el criterio público de PSA (55/45 → 10, 60/40 → 9,
+65/35 → 8, 70/30 → 7…). Si la carta no tiene marco medible (full art), se marca
+*no medible* y decide la red.
+
+**Esquinas, bordes y superficie**: los estima la red. No existe un dataset público de
+fotos con su grado PSA, pero el desgaste **sí** se puede simular con severidad conocida:
+
+```
+etiqueta_subgrado = 10 - 9 * severidad
+```
+
+Se aplica blanqueo de esquinas, mellas en el borde, rayones y descentrado de corte con
+severidad aleatoria, y la red aprende a leer esa severidad desde la imagen. Split **por
+carta**: ninguna carta del test se vio entrenando. Métricas en
+`vision/models/grade_metrics.json`: MAE en grados, % dentro de ±1 grado, correlación por
+eje y comparación contra el baseline de predecir la media.
+
+Además responde la pregunta útil: **¿compensa graduarla?** Con el precio en crudo, el
+multiplicador de mercado por grado y el coste del servicio (~22 €), la app dice si el
+encapsulado deja ganancia neta.
+
+> **Limitación honesta:** el desgaste es sintético y PSA evalúa la carta física con lupa
+> y luz rasante. Esto es **pre-grading**: sirve para decidir qué cartas mandar a graduar,
+> no para sustituir el dictamen.
+
+### Un detalle que importa
+
+Las imágenes de TCGdex son **RGBA con las esquinas transparentes**. Un `convert("RGB")`
+directo las deja blancas y cualquier medida de esquinas da "carta blanqueada" en
+escaneos perfectos. `vision/grading.flatten()` las compone sobre blanco y el parche de
+medida se mete hacia dentro, fuera del radio del redondeo.
 
 ---
 
@@ -88,11 +132,25 @@ python scripts/fetch_dataset.py --sets 30 --workers 24
 Descarga ~4.500 cartas de los 30 sets más recientes: metadatos y precios en
 `data/cards.jsonl`, imágenes oficiales en `data/images/`. Tarda unos 5 minutos.
 
-### 2. Entrenar (en un PC, no en la Pi)
+### 2a. Entrenar en Google Colab (recomendado, con GPU gratis)
+
+[`notebooks/pokevision_colab.ipynb`](notebooks/pokevision_colab.ipynb) → **Abrir en Colab**
+→ `Entorno de ejecución → GPU (T4)` → *Ejecutar todo*.
+
+Clona el repo, descarga el dataset, entrena los cuatro modelos, exporta a ONNX y te
+descarga un `models.zip` listo para copiar a la Pi. **12-18 minutos** con T4; con GPU se
+usan lotes mucho mayores, que es justo lo que mejora el aprendizaje contrastivo.
+
+```
+https://colab.research.google.com/github/caesar-dat-com/pokevision-pi/blob/main/notebooks/pokevision_colab.ipynb
+```
+
+### 2b. Entrenar (en un PC, no en la Pi)
 
 ```bash
-python vision/train/train_embedder.py  --epochs 6 --batch 48   # identificación
+python vision/train/train_embedder.py  --epochs 6 --batch 48    # identificación
 python vision/train/train_condition.py --epochs 5 --per-class 1 # falsa/dañada
+python vision/train/train_grade.py     --epochs 4 --per-card 2  # calificación PSA
 python pricing/train_price.py                                   # valor futuro
 python vision/build_index.py                                    # ONNX + índice
 ```
@@ -147,7 +205,8 @@ Pestañas: **Escanear · Colección · Mercado · Modelos**.
 
 | Método | Ruta | Descripción |
 |---|---|---|
-| `POST` | `/api/scan` | multipart `file` → carta + precio + predicción + veredicto |
+| `POST` | `/api/scan` | multipart `file` → carta + precio + predicción + veredicto + grado PSA |
+| `POST` | `/api/grade` | solo pre-grading PSA, sin identificar la carta |
 | `GET` | `/api/card/{id}` | ficha, precio y proyección |
 | `GET` | `/api/search?q=` | búsqueda por nombre |
 | `GET` | `/api/collection` | colección y valor total |

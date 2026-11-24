@@ -1,0 +1,14 @@
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+data/datasets/*
+!data/datasets/.gitkeep
+data/cards_index/*
+!data/cards_index/.gitkeep
+vision/models/*.onnx
+vision/models/*.pt
+vision/models/*.tflite
+*.npy
+*.log
+

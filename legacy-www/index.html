@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f1117">
+  <title>CardCalc</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="logo.svg" type="image/svg+xml">
+</head>
+<body>
+  <header class="barra">
+    <div class="marca"><img class="logo" src="logo.svg" alt="" aria-hidden="true"><span>Card<b>Calc</b></span></div>
+    <div class="barra-der">
+      <div id="dolar" class="dolar"></div>
+      <button class="btn-ajustes" id="btn-ajustes" aria-label="Ajustes">⚙️</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- ================= ESCANEAR ================= -->
+    <section id="vista-escanear" class="vista activa">
+      <!-- visor en vivo -->
+      <div id="panel-camara">
+        <div class="idiomas-fila"><span>Idioma de tus cartas</span><div class="chips" id="idiomas"></div></div>
+        <div class="visor" id="visor">
+          <video id="video" playsinline muted autoplay></video>
+          <div class="marco" id="marco"><span></span><span></span><span></span><span></span></div>
+          <div class="visor-botones">
+            <button class="visor-btn" id="btn-auto" aria-pressed="false" title="Escaneo automático">⚡ AUTO</button>
+            <button class="visor-btn" id="btn-linterna" aria-pressed="false" title="Linterna" hidden>🔦</button>
+          </div>
+          <p class="pista" id="pista">Pon la carta dentro del marco · evita reflejos inclinándola un poco</p>
+          <div class="sin-camara" id="sin-camara" hidden>
+            <p>No se pudo abrir la cámara en vivo.</p>
+            <button class="btn secundario" id="btn-reintentar">Reintentar</button>
+          </div>
+        </div>
+        <div class="controles">
+          <button class="btn-redondo" id="btn-galeria" aria-label="Galería">🖼️</button>
+          <button class="disparador" id="btn-capturar" aria-label="Tomar foto"><span></span></button>
+          <button class="btn-redondo" id="btn-foto-nativa" aria-label="Cámara del sistema">📷</button>
+        </div>
+        <form id="form-buscar" class="buscar">
+          <input id="txt-buscar" type="search" placeholder="O escribe: 43 94 · 043094 · Milcery" autocomplete="off" enterkeyhint="search">
+          <button type="submit" class="btn secundario">Buscar</button>
+        </form>
+        <div class="fila-botones">
+          <button class="btn secundario chico" id="btn-busqueda-avanzada">🔎 Búsqueda avanzada</button>
+          <button class="btn secundario chico" id="btn-energias">⚡ Añadir energías básicas</button>
+        </div>
+        <label class="interruptor auto"><input type="checkbox" id="auto-guardar"><span></span>Guardar automáticamente en mi colección cada carta que reconozca</label>
+      </div>
+
+      <!-- resultado de la última carta (la cámara sigue activa arriba: se escanea de corrido) -->
+      <div id="panel-resultado" hidden>
+        <div class="fila-res">
+          <div class="mini" id="mini-wrap">
+            <img id="mini" alt="Tu foto">
+            <span class="punto" id="punto" hidden></span>
+          </div>
+          <div class="res-texto">
+            <div id="estado" class="estado"></div>
+            <p class="ayuda" id="ayuda-toque" hidden>¿No es tu carta? <b>Toca el número</b> en tu foto (abajo, ej. 043/094) y la vuelvo a leer.</p>
+          </div>
+        </div>
+        <p id="titulo-cand" class="titulo-sec" hidden></p>
+        <button class="btn secundario chico" id="btn-ordenar-precio" hidden>💲 Ver precios y ordenar de la más barata a la más cara</button>
+        <div id="candidatos" class="carrusel"></div>
+      </div>
+
+      <!-- cartas escaneadas en esta sesión -->
+      <div id="panel-sesion" hidden>
+        <div class="sesion-cab">
+          <p class="titulo-sec">Escaneadas ahora · <span id="sesion-total"></span></p>
+        </div>
+        <p class="meta" id="sesion-venta"></p>
+        <ul id="lista-sesion" class="lista-sesion"></ul>
+        <div class="botones">
+          <button class="guardar" id="btn-guardar-todas">＋ Guardar todas</button>
+          <button id="btn-compartir-lote">📋 Compartir lote</button>
+          <button id="btn-limpiar-sesion">Limpiar lista</button>
+        </div>
+      </div>
+
+      <div id="panel-detalle" hidden>
+        <p class="titulo-sec">Detalle de la última carta</p>
+        <div id="detalle"></div>
+        <details id="ocr-detalle" hidden><summary>Texto leído</summary><pre id="ocr-texto" data-no-traducir></pre></details>
+      </div>
+
+      <input id="input-foto" type="file" accept="image/*" capture="environment" hidden>
+      <input id="input-galeria" type="file" accept="image/*" multiple hidden>
+    </section>
+
+    <!-- ================= COLECCIÓN ================= -->
+    <section id="vista-coleccion" class="vista">
+      <div class="resumen" id="resumen"></div>
+      <div class="botones compartir">
+        <button id="btn-compartir-col">📤 Compartir colección</button>
+        <button id="btn-compartir-rep">🔁 Mis repetidas</button>
+      </div>
+      <div class="segmento" id="col-modo">
+        <button data-modo="cartas" class="sel">🃏 Cartas</button>
+        <button data-modo="sets">📚 Sets</button>
+        <button data-modo="stats">📊 Stats</button>
+        <button data-modo="venta">💸 Venta</button>
+      </div>
+      <div class="filtros">
+        <input id="col-buscar" type="search" placeholder="Buscar en mi colección" autocomplete="off">
+        <div class="fila-filtros">
+          <select id="col-orden" aria-label="Ordenar">
+            <option value="caras">💰 Más caras</option>
+            <option value="raras">✨ Más raras</option>
+            <option value="recientes">🕒 Recientes</option>
+            <option value="suben">📈 Más subieron</option>
+            <option value="bajan">📉 Más bajaron</option>
+            <option value="nombre">🔤 Nombre</option>
+          </select>
+          <select id="col-set" aria-label="Set"><option value="">Todos los sets</option></select>
+        </div>
+        <div class="chips" id="col-tipo"></div>
+        <div class="chips" id="col-idioma" hidden></div>
+        <div class="chips" id="col-carpeta" hidden></div>
+        <div class="chips" id="col-rareza"></div>
+      </div>
+      <div id="lista-coleccion" class="rejilla"></div>
+      <p class="legal">Copia de seguridad, moneda y más en <b>⚙️ Ajustes</b> (arriba a la derecha).</p>
+    </section>
+
+    <!-- ================= AJUSTES ================= -->
+    <section id="vista-ajustes" class="vista">
+      <h2 class="titulo-vista">⚙️ Ajustes</h2>
+
+      <div class="ajuste-grupo">
+        <p class="titulo-sec">🗣️ Idioma de la app</p>
+        <div class="segmento" id="aj-idioma-app" data-no-traducir>
+          <button data-l="es">🇪🇸 Español</button>
+          <button data-l="en">🇬🇧 English</button>
+        </div>
+      </div>
+
+      <div class="ajuste-grupo">
+        <p class="titulo-sec">💱 Moneda</p>
+        <select id="aj-moneda" aria-label="Moneda"></select>
+        <p class="meta" id="aj-moneda-info"></p>
+      </div>
+
+      <div class="ajuste-grupo">
+        <p class="titulo-sec">🌐 Idioma de las cartas</p>
+        <div class="chips envolver" id="aj-idioma"></div>
+        <p class="meta">En qué idioma busca y reconoce tus cartas (también se cambia en Escanear). Si una carta dice «EN» o «ES», se detecta sola.</p>
+      </div>
+
+      <div class="ajuste-grupo">
+        <p class="titulo-sec">💲 Precios</p>
+        <div class="campo"><span>Fuente principal del precio</span>
+          <div class="segmento" id="aj-fuente">
+            <button data-v="tcgplayer">TCGplayer (EE. UU.)</button>
+            <button data-v="cardmarket">Cardmarket (Europa)</button>
+          </div></div>
+        <div class="campo"><span>Actualizar precios de la colección automáticamente</span>
+          <select id="aj-horas">
+            <option value="3">Cada 3 horas</option><option value="6">Cada 6 horas</option>
+            <option value="12">Cada 12 horas</option><option value="24">Una vez al día</option>
+            <option value="0">Solo cuando yo toque «Actualizar»</option>
+          </select></div>
+        <div class="campo"><span>% de venta por defecto (modo venta y lotes): <b id="aj-pct-txt"></b></span>
+          <input type="range" id="aj-pct" min="40" max="100" step="5"></div>
+        <div class="campo"><span>Calculadora de venta: comisión (%) y envío</span>
+          <div class="fila-input">
+            <input type="number" inputmode="decimal" min="0" max="50" id="aj-comision" placeholder="% comisión">
+            <input type="number" inputmode="decimal" min="0" id="aj-envio" placeholder="envío">
+          </div>
+          <span class="meta">Ej.: Mercado Libre ≈ 13–17 %. Con esto la app te dice cuánto te queda en la mano al vender.</span></div>
+      </div>
+
+      <div class="ajuste-grupo">
+        <p class="titulo-sec">🔔 Alertas</p>
+        <label class="interruptor fila-aj"><input type="checkbox" id="aj-notif"><span></span>Avisarme en el celular cuando un deseo llegue a mi precio (se revisa cada ~6 h, aunque la app esté cerrada)</label>
+        <div class="campo"><span>Avisar también si una carta de mi colección sube o baja más de: <b id="aj-mov-txt"></b></span>
+          <input type="range" id="aj-mov" min="0" max="50" step="5"></div>
+        <span class="meta">0 % = no avisar por cambios de la colección.</span>
+      </div>
+
+      <div class="ajuste-grupo">
+        <p class="titulo-sec">🎨 Apariencia</p>
+        <div class="segmento" id="aj-tema">
+          <button data-v="oscuro">🌙 Oscuro</button>
+          <button data-v="claro">☀️ Claro</button>
+        </div>
+      </div>
+
+      <div class="ajuste-grupo">
+        <p class="titulo-sec">📷 Escaneo</p>
+        <label class="interruptor fila-aj"><input type="checkbox" id="aj-autoguardar"><span></span>Guardar automáticamente cada carta reconocida</label>
+        <label class="interruptor fila-aj"><input type="checkbox" id="aj-autoscan"><span></span>⚡ Escaneo AUTO (leer la carta cuando queda quieta)</label>
+        <label class="interruptor fila-aj"><input type="checkbox" id="aj-vibrar"><span></span>Vibrar al leer una carta</label>
+      </div>
+
+      <div class="ajuste-grupo respaldo">
+        <p class="titulo-sec">💾 Copia de seguridad</p>
+        <p class="meta">Guarda tu colección y tus deseos en un archivo (Documentos) para pasarlos a otro celular o por si acaso.</p>
+        <label class="interruptor fila-aj"><input type="checkbox" id="aj-backup-auto"><span></span>Copia automática cada semana (en Documentos)</label>
+        <p class="meta" id="aj-backup-info"></p>
+        <div class="botones">
+          <button id="btn-exportar">⤓ Exportar</button>
+          <button id="btn-importar">⤒ Importar</button>
+        </div>
+        <input id="input-importar" type="file" accept=".json,application/json" hidden>
+      </div>
+
+      <div class="ajuste-grupo">
+        <p class="titulo-sec">🧹 Datos</p>
+        <p class="meta" id="aj-datos-info"></p>
+        <div class="botones">
+          <button id="aj-cache">Borrar caché de sets y precios</button>
+          <button class="peligro" id="aj-borrar">Borrar toda mi colección</button>
+        </div>
+      </div>
+
+      <div class="ajuste-grupo">
+        <p class="titulo-sec">ℹ️ Acerca de</p>
+        <p><b id="version-app">CardCalc</b></p>
+        <p class="meta">Datos de cartas: TCGdex · Precios: TCGplayer y Cardmarket (vía TCGdex) · Logos faltantes: Pokémon TCG API · Tasas de cambio: open.er-api.com. Lectura de cartas en el propio celular (Tesseract), sin enviar tus fotos a ningún servidor.</p>
+        <p class="legal">CardCalc es una app independiente: no está afiliada, patrocinada ni aprobada por Nintendo, The Pokémon Company, Creatures o Game Freak. Pokémon y sus nombres son marcas de sus respectivos dueños.</p>
+      </div>
+    </section>
+
+    <!-- ================= INTERCAMBIO ================= -->
+    <section id="vista-intercambio" class="vista">
+      <div class="resumen" id="cambio-resumen"></div>
+      <div class="lados">
+        <div class="lado" data-lado="doy">
+          <div class="lado-cab"><b>📤 Yo doy</b><span id="total-doy"></span></div>
+          <ul class="lista-cambio" id="lista-doy"></ul>
+          <div class="botones">
+            <button data-agregar="doy">＋ Buscar carta</button>
+            <button data-de-coleccion>🗂️ De mi colección</button>
+          </div>
+        </div>
+        <div class="lado" data-lado="recibo">
+          <div class="lado-cab"><b>📥 Yo recibo</b><span id="total-recibo"></span></div>
+          <ul class="lista-cambio" id="lista-recibo"></ul>
+          <div class="botones">
+            <button data-agregar="recibo">＋ Buscar carta</button>
+          </div>
+        </div>
+      </div>
+      <div class="botones">
+        <button class="guardar" id="btn-confirmar-cambio">✓ Hacer el cambio</button>
+        <button id="btn-compartir-cambio">📤 Compartir</button>
+        <button id="btn-limpiar-cambio">Limpiar</button>
+      </div>
+      <p class="nota">Tip: también puedes mandar cartas al intercambio desde el escáner con «⇄ La doy» / «⇄ La recibo». Al hacer el cambio, las que das salen de tu colección y las que recibes entran.</p>
+    </section>
+
+    <!-- ================= MAZOS ================= -->
+    <section id="vista-mazos" class="vista">
+      <div class="resumen">
+        <div class="meta">🃏 Tus mazos: qué cartas tienes, cuáles te faltan y cuánto cuesta completarlos</div>
+        <div class="botones">
+          <button class="guardar" id="btn-nuevo-mazo">＋ Nuevo mazo</button>
+          <button id="btn-importar-mazo">📋 Importar lista (TCG Live)</button>
+        </div>
+        <div class="botones">
+          <button id="btn-mazo-auto">🤖 Armar con mis cartas</button>
+          <button id="btn-plantillas">📚 Plantillas de mazos</button>
+        </div>
+      </div>
+      <div id="lista-mazos" class="lista-mazos"></div>
+    </section>
+
+    <!-- ================= DESEOS ================= -->
+    <section id="vista-deseos" class="vista">
+      <div class="resumen" id="deseos-resumen"></div>
+      <div class="botones">
+        <button class="guardar" id="btn-agregar-deseo">＋ Agregar carta que quiero</button>
+        <button id="btn-actualizar-deseos">↻ Actualizar</button>
+      </div>
+      <ul class="lista-deseos" id="lista-deseos"></ul>
+    </section>
+  </main>
+
+  <nav class="tabbar">
+    <button class="tab activo" data-vista="escanear"><span>📷</span>Escanear</button>
+    <button class="tab" data-vista="coleccion"><span>🗂️</span>Colección</button>
+    <button class="tab" data-vista="intercambio"><span>⇄</span>Intercambio</button>
+    <button class="tab" data-vista="mazos"><span>🃏</span>Mazos</button>
+    <button class="tab" data-vista="deseos"><span>♡</span>Deseos<i class="punto-tab" id="punto-deseos" hidden></i></button>
+  </nav>
+
+  <!-- detalle de una carta de la colección -->
+  <div class="modal" id="modal" hidden>
+    <div class="modal-caja">
+      <button class="cerrar" id="modal-cerrar" aria-label="Cerrar">✕</button>
+      <div id="modal-cuerpo"></div>
+    </div>
+  </div>
+
+  <script src="i18n.js"></script>
+  <script src="i18n-en.js"></script>
+  <script src="lib/tesseract.min.js"></script>
+  <script src="reconocer.js"></script>
+  <script src="app.js"></script>
+  <script src="extras.js"></script>
+  <script src="extras2.js"></script>
+  <script src="gradeo.js"></script>
+  <script src="mazos.js"></script>
+  <script src="mazos-auto.js"></script>
+  <script src="extras3.js"></script>
+  <script src="energias.js"></script>
+  <script src="ajustes.js"></script>
+</body>
+</html>

@@ -14,7 +14,7 @@ import random
 import time
 
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -184,6 +184,53 @@ def health():
             "catalog_cards": len(CARDS), "temp_c": temp, "metrics": metrics}
 
 
+# ------------------------------------------------------------------ telefono QR
+# El telefono queda fijo en la mesa mostrando un QR con la URL de la laptop;
+# la camara de la Pi es la MISMA pagina del telefono (o un simulador).
+_LAST_SCAN_FILE = "/tmp/pokevision_last_scan.json"
+
+
+@app.get("/qr", response_class=HTMLResponse)
+async def qr_page(request: Request):
+    """Pantalla para el telefono fijo: QR + estado + carta en vivo."""
+    return templates.TemplateResponse(request, "qr.html", {})
+
+
+@app.get("/api/frame")
+async def frame():
+    """Ultimo frame de la camara (lo escribe scripts/adb_camera.py en /tmp/frame.jpg)."""
+    if os.path.exists("/tmp/frame.jpg"):
+        return FileResponse("/tmp/frame.jpg", media_type="image/jpeg",
+                            headers={"Cache-Control": "no-store"})
+    raise HTTPException(503, "camara no conectada")
+
+
+@app.get("/api/frame_state")
+async def frame_state(request: Request):
+    host = request.client.host if request.client else "?"
+    # la laptop escanea el QR desde el telefono: le damos una URL que le sirva a ELLA
+    ui = os.environ.get("POKEVISION_UI_URL") or f"http://{_lan_ip()}:8000"
+    out = {"cam_ok": os.path.exists("/tmp/frame.json")
+           and json.load(open("/tmp/frame.json")).get("ok", False),
+           "ui_url": ui, "host": host, "demo": PIPE is None}
+    if os.path.exists(_LAST_SCAN_FILE):
+        try:
+            out["last_card"] = json.load(open(_LAST_SCAN_FILE))
+        except Exception:  # noqa: BLE001
+            pass
+    return out
+
+
+def _lan_ip() -> str:
+    import socket
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80)); ip = s.getsockname()[0]; s.close()
+        return ip
+    except Exception:  # noqa: BLE001
+        return "127.0.0.1"
+
+
 @app.post("/api/grade")
 async def grade_only(file: UploadFile = File(...)):
     """Solo pre-grading PSA, sin identificar la carta (mas rapido)."""
@@ -206,6 +253,18 @@ async def scan(file: UploadFile = File(...)):
     blob = await file.read()
     if not blob:
         raise HTTPException(400, "imagen vacia")
+    # ultima carta escaneada: la pagina QR del telefono la muestra en vivo
+    try:
+        r0 = (PIPE.analyze(blob) if PIPE is not None else scan_demo(blob))
+        mini = {"id": r0.get("card", {}).get("id"), "name": r0.get("card", {}).get("name"),
+                "set_name": r0.get("card", {}).get("set_name"),
+                "image": r0.get("card", {}).get("image"),
+                "eur": (r0.get("price") or {}).get("eur")}
+        with open(_LAST_SCAN_FILE + ".tmp", "w") as f:
+            json.dump(mini, f)
+        os.replace(_LAST_SCAN_FILE + ".tmp", _LAST_SCAN_FILE)
+    except Exception:  # noqa: BLE001
+        pass
     if PIPE is None:
         r = demo_result(blob)
         return JSONResponse(r)

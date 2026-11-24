@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="es" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000244">
+<title>PokéVision · Conecta</title>
+<script>document.documentElement.dataset.theme = localStorage.getItem('theme') || 'dark';</script>
+<link rel="stylesheet" href="/static/css/tokens.css">
+<link rel="stylesheet" href="/static/css/app.css">
+<style>
+  /* Pagina QR del TELEFONO: oscura siempre (el QR se escanea mejor en oscuro
+     y el telefono es fijo, montado en la mesa). */
+  html,body{height:100%}
+  body{display:grid;place-items:center;overflow:hidden}
+  .qr-stage{position:relative;display:grid;place-items:center;gap:18px;padding:0 20px}
+  .card-ghost{position:absolute;inset:0;pointer-events:none;opacity:.10;
+    animation:ghost-float 9s var(--ease) infinite alternate}
+  @keyframes ghost-float{from{transform:translateY(-8px) rotate(-2deg)}to{transform:translateY(10px) rotate(2.5deg)}}
+  .qr-wrap{position:relative;width:min(78vw,340px);aspect-ratio:1;display:grid;place-items:center}
+  /* el QR con marco Champions y scanline */
+  .qr-wrap .plate{position:absolute;inset:0;border-radius:26px;overflow:hidden;
+    background:linear-gradient(160deg,#f7f9ff,#dfe6ff);box-shadow:0 26px 60px rgba(0,2,68,.6)}
+  .qr-wrap img,.qr-wrap canvas{position:relative;z-index:2;width:82%;height:82%;image-rendering:pixelated}
+  .scanline{position:absolute;left:8%;right:8%;height:3px;z-index:3;border-radius:99px;
+    background:linear-gradient(90deg,transparent,var(--lime),transparent);
+    filter:drop-shadow(0 0 8px var(--lime));animation:scan 2.6s var(--ease) infinite}
+  @keyframes scan{0%{top:10%}50%{top:88%}100%{top:10%}}
+  .corner{position:absolute;width:34px;height:34px;z-index:4;border:3px solid var(--lime);opacity:.9}
+  .corner.tl{top:-8px;left:-8px;border-right:0;border-bottom:0;border-radius:10px 0 0 0}
+  .corner.tr{top:-8px;right:-8px;border-left:0;border-bottom:0;border-radius:0 10px 0 0}
+  .corner.bl{bottom:-8px;left:-8px;border-right:0;border-top:0;border-radius:0 0 0 10px}
+  .corner.br{bottom:-8px;right:-8px;border-left:0;border-top:0;border-radius:0 0 10px 0}
+  h1{font-family:var(--display);font-size:clamp(1.5rem,6vw,2.1rem);font-weight:900;
+     letter-spacing:.04em;margin:0;text-align:center}
+  h1 b{color:var(--lime)}
+  .sub{color:var(--ink-dim);text-align:center;font-size:clamp(.85rem,3.4vw,1rem);margin:0;line-height:1.5}
+  .mono{font-family:ui-monospace,monospace;color:var(--lime);font-weight:700}
+  /* tarjeta en vivo: la carta que se esta escaneando ahora */
+  .live{display:flex;align-items:center;gap:14px;margin-top:6px;padding:10px 16px;
+    border-radius:16px;background:var(--glass);border:1px solid var(--line);
+    min-height:64px;max-width:min(92vw,420px)}
+  .live img{width:44px;height:61px;border-radius:7px;object-fit:cover;background:#0a0d26}
+  .live .t{font-size:.9rem;line-height:1.35}
+  .live .t small{display:block;color:var(--ink-faint)}
+  .live .p{margin-left:auto;font-family:var(--display);font-weight:900;font-size:1.05rem;color:var(--lime)}
+  .live.empty{justify-content:center;color:var(--ink-faint);font-size:.85rem}
+  .badge{position:fixed;top:14px;right:14px;display:flex;gap:6px;align-items:center;
+    padding:7px 12px;border-radius:999px;background:var(--glass);border:1px solid var(--line);
+    font-size:.72rem;font-weight:800;letter-spacing:.06em}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--lime);animation:pulse 1.6s infinite}
+  .dot.off{background:var(--danger);animation:none}
+  @keyframes pulse{50%{opacity:.35}}
+</style>
+</head>
+<body>
+<div class="aurora" aria-hidden="true"><span class="b3"></span></div>
+<div class="badge"><span class="dot" id="dot"></span><span id="badge">CÁMARA</span></div>
+
+<div class="qr-stage">
+  <h1>Apunta la laptop a este <b>código</b></h1>
+  <p class="sub">La carta se analiza en la Raspberry · la interfaz completa se abre en la
+     pantalla grande<br><span class="mono" id="url-text">…</span></p>
+
+  <div class="qr-wrap">
+    <div class="plate"></div>
+    <canvas id="qr" width="512" height="512"></canvas>
+    <span class="scanline"></span>
+    <span class="corner tl"></span><span class="corner tr"></span>
+    <span class="corner bl"></span><span class="corner br"></span>
+    <svg class="card-ghost" viewBox="0 0 160 224" width="150">
+      <rect x="8" y="8" width="144" height="208" rx="12" fill="#1c208a" stroke="#bfe900"/>
+      <circle cx="80" cy="86" r="40" fill="#8477fb" opacity=".5"/>
+      <rect x="20" y="150" width="120" height="12" rx="6" fill="#bfe900" opacity=".6"/>
+    </svg>
+  </div>
+
+  <div class="live empty" id="live">Esperando la primera carta…</div>
+</div>
+
+<script src="/static/js/qrcodegen.js"></script>
+<script>
+'use strict';
+/* QR del tamaño correcto para el telefono fijo: la URL de la laptop. */
+(async () => {
+  const st = await fetch('/api/frame_state').then(r => r.json()).catch(() => null);
+  const url = (st && st.ui_url) || 'http://raspberrypi.local:8000';
+  document.getElementById('url-text').textContent = url;
+
+  /* QR dibujado en canvas: sin librerias externas, funciona sin internet */
+  const c = document.getElementById('qr');
+  const ctx = c.getContext('2d');
+  const qrcode = qrcodegen.QrCode;
+  const qr = qrcode.encodeText(url, qrcode.Ecc.MEDIUM);
+  const n = qr.size, scale = Math.max(2, Math.floor(512 / (n + 8)));
+  const off = (512 - n * scale) / 2;
+  ctx.fillStyle = '#f7f9ff'; ctx.fillRect(0, 0, 512, 512);
+  ctx.fillStyle = '#0d1330';
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++)
+    if (qr.getModule(x, y)) ctx.fillRect(off + x * scale, off + y * scale, scale, scale);
+
+  /* estado de camara + carta en vivo (poll suave, 1 Hz) */
+  const dot = document.getElementById('dot'), badge = document.getElementById('badge');
+  const live = document.getElementById('live');
+  let last = '';
+  setInterval(async () => {
+    const s = await fetch('/api/frame_state').then(r => r.json()).catch(() => null);
+    if (!s) return;
+    dot.classList.toggle('off', !s.cam_ok);
+    badge.textContent = s.cam_ok ? 'CÁMARA' : 'SIN CÁMARA';
+    if (s.last_card && s.last_card.id !== last) {
+      last = s.last_card.id;
+      live.className = 'live';
+      live.innerHTML = `<img src="${s.last_card.image}" alt="">
+        <div class="t">${s.last_card.name}<small>${s.last_card.set_name || ''}</small></div>
+        <div class="p">${s.last_card.eur != null ? '€' + s.last_card.eur : ''}</div>`;
+    }
+  }, 1000);
+})();
+</script>
+</body>
+</html>

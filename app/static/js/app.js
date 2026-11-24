@@ -73,6 +73,11 @@ addEventListener('scroll', () => {
   document.body.classList.toggle('scrolled', scrollY > 24);
 }, { passive: true });
 
+$('#qr-link').addEventListener('click', () => {
+  window.open('/qr', '_blank');
+  toast('Abre esa URL en el teléfono fijo');
+});
+
 /* -------------------------------------------------------------------- tema */
 const themeIcon = () => document.documentElement.dataset.theme === 'dark' ? '☾' : '☀︎';
 $('#theme').textContent = themeIcon();
@@ -85,8 +90,65 @@ $('#theme').addEventListener('click', () => {
     next === 'dark' ? '#000244' : '#eef1fa';
 });
 
+/* ------------------------------------------- fuente de video: telefono/adb
+   La camara real vive en la Pi (scripts/adb_camera.py escribe /tmp/frame.jpg).
+   Si existe ese stream, el visor lo consume; si no, cae a getUserMedia local. */
+async function usarFramePi() {
+  try {
+    const r = await fetch('/api/frame', {cache: 'no-store'});
+    if (!r.ok) return false;
+    const b = await r.blob();
+    if (b.size < 1024) return false;
+    return URL.createObjectURL(b);
+  } catch { return false; }
+}
+
+let PI_FRAME_TIMER = null;
+async function iniciarCamara() {
+  const v = $('#video');
+  const url = await usarFramePi();
+  if (url) {
+    // refresco del frame: mas rapido en demo (2 fps) y suave en produccion
+    let busy = false;
+    PI_FRAME_TIMER = setInterval(async () => {
+      if (busy || !STREAM.on) return; busy = true;
+      try {
+        const u2 = await usarFramePi();
+        if (u2) { v.src = u2; URL.revokeObjectURL(url); }
+      } catch {} busy = false;
+    }, 500);
+    v.src = url; v.classList.add('on');
+    toast('Cámara de la Pi conectada');
+    return;
+  }
+  // fallback: camara del propio laptop
+  try {
+    const s = await navigator.mediaDevices.getUserMedia({video: {facingMode: 'environment'}});
+    v.srcObject = s; v.classList.add('on');
+  } catch (e) { toast('Sin cámara: usa el botón de imagen'); }
+}
+
 /* ------------------------------------------------------------------ cámara */
 async function startCam() {
+  const v = $('#video');
+  // primero la camara de la Pi (telefono por ADB); getUserMedia solo como fallback
+  try {
+    const ok = await usarFramePi();
+    if (ok) {
+      STREAM = { on: true, pi: true };
+      v.src = ok; v.classList.add('on');
+      $('#btn-cam').textContent = 'Apagar cámara';
+      toast('Cámara Pi (teléfono) conectada');
+      if (!PI_FRAME_TIMER) {
+        PI_FRAME_TIMER = setInterval(async () => {
+          if (!STREAM || !STREAM.pi || !STREAM.on) return;
+          const u2 = await usarFramePi();
+          if (u2) { URL.revokeObjectURL(v.src); v.src = u2; }
+        }, 500);
+      }
+      return;
+    }
+  } catch (e) { /* seguimos con getUserMedia */ }
   try {
     STREAM = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 960 } },
@@ -104,6 +166,7 @@ async function startCam() {
   }
 }
 function stopCam() {
+  if (PI_FRAME_TIMER) { clearInterval(PI_FRAME_TIMER); PI_FRAME_TIMER = null; }
   if (STREAM) { STREAM.getTracks().forEach(t => t.stop()); STREAM = null; }
   $('#vph').hidden = false;
   $('#btn-cam').textContent = 'Activar cámara';
